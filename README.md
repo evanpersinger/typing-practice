@@ -146,6 +146,21 @@ getting wrong until you'd typed it once, and five a session was enough to fill
 most of the next session with guesses. The model writes sentences now, and
 nothing else.
 
+## Roadmap
+
+The **Roadmap** tab is a road with a car on it. Every square is a section to
+finish, each separated from the next by one blank square, and the car sits on
+the square you've reached. Squares run cool to warm from the start square (`S`)
+to the end, dim until you've driven over them and full strength once you have,
+so the road colours in behind you.
+
+None of it is wired to anything yet. The number of sections and the car's
+position are two constants at the top of `frontend/src/sections/roadmap.tsx`,
+and nothing is fetched or stored, so the car parks on `S` every time. What a
+section actually means is the next thing to decide; the colours were picked to
+say distance travelled and nothing else, so naming them later doesn't fight
+anything.
+
 ## Weak words
 
 The **Words** tab is a fixed board of 60 cells, six across by ten down, holding
@@ -196,6 +211,10 @@ let a four-word sentence count as much as a long one.
   through the `/api` proxy; no server-side rendering, no router, one page.
   Styled with Tailwind, so there's no stylesheet to speak of: `index.css` is
   the Tailwind import, the page background, and one keyframe.
+- `frontend/src/sections/` — one file per tab, each holding that tab's state
+  and its screen. The hook is called from `App` rather than from the component
+  next to it, on purpose: only the JSX is conditional, so leaving a tab
+  mid-sentence doesn't throw the session away.
 - `sessions/` / `sessions_test/` — one markdown transcript per sitting, written
   after every drill: prompt, what you typed, and which target words you got.
   A readable history, not just database rows. Gitignored, personal and testing
@@ -208,10 +227,17 @@ backend/
   agent.py       The one model call: write the practice sentences.
   test_agent.py  Same function, canned. Used by the testing profile.
 frontend/src/
-  App.tsx        The whole UI: profile picker, practice, free type, stats, words.
+  App.tsx        The shell: profile picker, tab bar, layout, and the wiring.
   api.ts         The fetch calls, and the profile header.
   grade.ts       Aligns typed words to expected words and marks the targets.
+  ui.ts          The few things two sections both need. Nothing else.
   index.css      Tailwind import, page background, one keyframe. That's all.
+frontend/src/sections/
+  practice.tsx   usePractice() + the sentence screen. Owns the drill clock.
+  freeType.tsx   useFreeType() + the word board.
+  stats.tsx      useStats() + the stats screen and one past session's recap.
+  words.tsx      useWords() + the weak-word board and the add-a-word panel.
+  roadmap.tsx    The road, the squares, and the car. No state at all.
 seed_words.txt          Example word list, committed. Baseline for both profiles.
 seed_words_personal.txt Your real word list, gitignored. Layers on top, personal only.
 ```
