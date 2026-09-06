@@ -835,11 +835,15 @@ export default function App() {
     setCurrent(e.target.value);
   }
 
+  /** Enter moves to the next sentence, but only once you've reached the end of
+   *  this one. Length, not correctness: a sentence typed wrong is still a
+   *  sentence you typed, and grading it is the whole point. Short of the end it
+   *  does nothing, and the letters still unlit past the caret say why. */
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      nextSentence();
-    }
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    if (current.length < drills[index].sentence.length) return;
+    nextSentence();
   }
 
   // Only words you have actually typed. A seeded word you've never seen says
@@ -1157,19 +1161,22 @@ export default function App() {
                     value wraps, the column grows taller, and the whole board
                     below it jumps. The width sits on the number itself, not the
                     column, because ch resolves against the element's own
-                    font-size and only the number is set at 2rem. */}
-                <div className="mb-6 flex gap-12">
+                    font-size and only the number is set at 2.4rem. */}
+                {/* A small indent off the board's left edge, well short of
+                    the board's own px-10: enough that the numbers don't hang off
+                    the corner, not so much that they read as a second column. */}
+                <div className="mb-6 flex gap-12 pl-3">
                   <div className="flex flex-col gap-1">
-                    <span className="w-[5ch] text-[2rem] font-semibold tabular-nums whitespace-nowrap">
+                    <span className="w-[5ch] text-[2.4rem] font-semibold tabular-nums whitespace-nowrap">
                       {freeWpm}
                     </span>
-                    <span className="text-[1.1rem]">wpm</span>
+                    <span className="text-[1.3rem]">wpm</span>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <span className="w-[5ch] text-[2rem] font-semibold tabular-nums whitespace-nowrap">
+                    <span className="w-[5ch] text-[2.4rem] font-semibold tabular-nums whitespace-nowrap">
                       {pct(freeTypedCount - freeMissCount, freeTypedCount)}
                     </span>
-                    <span className="text-[1.1rem]">accuracy</span>
+                    <span className="text-[1.3rem]">accuracy</span>
                   </div>
                 </div>
                 <div className={FREE_BOARD}>
