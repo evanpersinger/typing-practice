@@ -15,7 +15,6 @@ import {
   fetchStats,
   setProfile,
   submitResults,
-  type AnalysisResponse,
   type Drill,
   type NewWord,
   type Profile,
@@ -75,15 +74,6 @@ const FREE_PENDING = "text-[#7d827e]";
 // sideways: the 2px border is cancelled by the 1px margin on either side.
 const FREE_CARET =
   "inline-block h-[1.05em] w-0 -mx-px border-l-2 border-white align-[-0.15em]";
-
-// The two things you can do on a finished session. Boxes rather than the
-// underlined text they used to be: they're the only actions on the screen, so
-// they should look like things you press. Same white outline and hover fill as
-// every other box button here, just sized to sit under the heading.
-// Tailwind's reset gives buttons `cursor: default`, hence the explicit pointer.
-const DONE_BUTTON =
-  "cursor-pointer rounded-lg border border-white px-10 py-5 " +
-  "text-[2rem] text-white no-underline hover:bg-white/8";
 
 // The four nav buttons. Boxes rather than underlined text, so the active one is
 // a faint fill instead of a border: the border is on all four now. Only the
@@ -146,7 +136,7 @@ const WORD_SLOTS = WORD_COLUMNS * WORD_ROWS;
 // (table-fixed is ignored when width is auto) and shrink-0 (otherwise the flex
 // row squeezes the board and clips words).
 const WORD_TABLE_WIDTH = "w-[1095px] shrink-0";
-type Phase = "idle" | "loading" | "typing" | "submitting" | "done";
+type Phase = "idle" | "loading" | "typing" | "submitting";
 
 // No done phase: there's nothing to submit and nothing to report, words are
 // added the moment they earn it, so ending a round drops you back on the start
@@ -402,11 +392,6 @@ export default function App() {
   const [typed, setTyped] = useState<string[]>([]);
   const [durations, setDurations] = useState<number[]>([]);
   const [current, setCurrent] = useState("");
-  const [results, setResults] = useState<WordResult[]>([]);
-  const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
-  // The end-of-session recap is fetched either way, it just stays folded away
-  // until you ask for it. Finishing a session shouldn't shove numbers at you.
-  const [showRecap, setShowRecap] = useState(false);
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[] | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<number | "">("");
@@ -529,9 +514,6 @@ export default function App() {
     setDurations([]);
     setIndex(0);
     setCurrent("");
-    setResults([]);
-    setAnalysis(null);
-    setShowRecap(false);
     resetClock();
   }
 
@@ -620,12 +602,14 @@ export default function App() {
         words: gradeDrill(drill, typedText),
       };
     });
-    setResults(perDrill.flatMap((d) => d.words));
     setPhase("submitting");
     try {
-      const data = await submitResults(perDrill);
-      setAnalysis(data);
-      setPhase("done");
+      await submitResults(perDrill);
+      // Straight back to the start screen, the way Free Type ends. The recap
+      // this used to show is the same SessionRecap the stats tab renders from
+      // the session just saved, and one screen is enough places for it to live.
+      resetSession();
+      setPhase("idle");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not submit results.");
       setPhase("typing");
@@ -765,10 +749,12 @@ export default function App() {
   }
 
   /** Space ends a word here, the way it does when you type anything else, so it
-   *  must never reach the box. Enter does the same for the last word of a line
-   *  out of habit. An empty box submits nothing: a stray space isn't a miss. */
+   *  must never reach the box. It's also the only key that ends one: Enter is
+   *  left alone and does nothing, so it can't bank a word you're half way
+   *  through and skip the rest of it. An empty box submits nothing either: a
+   *  stray space isn't a miss. */
   function handleFreeKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key !== " " && e.key !== "Enter") return;
+    if (e.key !== " ") return;
     e.preventDefault();
     if (freeCurrent.trim() === "") return;
     void commitFreeWord();
@@ -951,7 +937,7 @@ export default function App() {
 
   const intro =
     tab === "practice" && phase !== "typing"
-      ? "These sentences include the words you need to practice. Type one sentence at a time. At the end of the session you can view your results."
+      ? "These sentences include the words you need to practice. Type one sentence at a time. Your results are saved when the session ends, and the stats tab has them."
       : tab === "free" && freePhase !== "typing"
         ? "Freely type and get graded on your wpm, accuracy, and what words you misspell the most often."
         : null;
@@ -1098,32 +1084,6 @@ export default function App() {
             )}
 
             {phase === "submitting" && <p>Checking your typing…</p>}
-
-            {phase === "done" && analysis && (
-              <div className="flex flex-col gap-7 leading-[1.6]">
-                <h1 className="m-0 text-[3.6rem]">Session complete</h1>
-                {/* self-start, or the flex row stretches and the buttons render
-                    as full-width bars. */}
-                <div className="flex gap-8 self-start">
-                  <button className={DONE_BUTTON} onClick={startSession}>
-                    New session
-                  </button>
-                  <button
-                    className={DONE_BUTTON}
-                    onClick={() => setShowRecap(!showRecap)}
-                  >
-                    {showRecap ? "Hide stats" : "Show stats"}
-                  </button>
-                </div>
-                {showRecap && (
-                  <SessionRecap
-                    words={results}
-                    typing={analysis.typing}
-                    newWords={analysis.new_words}
-                  />
-                )}
-              </div>
-            )}
           </>
         )}
 
