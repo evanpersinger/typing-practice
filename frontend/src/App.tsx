@@ -1074,6 +1074,11 @@ export default function App() {
                     value={current}
                     onChange={handleChange}
                     onKeyDown={handleKeyDown}
+                    // Pasting the sentence in is not typing it. It also lands a
+                    // drill of a few milliseconds in the database, which clears
+                    // the duration filter the wpm average is built on and drags
+                    // that average for good.
+                    onPaste={(e) => e.preventDefault()}
                     autoComplete="off"
                     autoCorrect="off"
                     spellCheck={false}
@@ -1178,6 +1183,9 @@ export default function App() {
                     setFreeCurrent(e.target.value);
                   }}
                   onKeyDown={handleFreeKeyDown}
+                  // Same rule as the practice box: a pasted word isn't one you
+                  // spelled, so it says nothing about whether you know it.
+                  onPaste={(e) => e.preventDefault()}
                   autoComplete="off"
                   autoCorrect="off"
                   spellCheck={false}

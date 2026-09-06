@@ -82,14 +82,20 @@ it to the request and every read and write follows it from there.
 1. **Start.** `GET /drills` picks your 7 weakest words still in rotation, plus 1
    graduated word as a surprise re-test, and the model writes 10 sentences using
    them. Roughly one target word per sentence.
-2. **Type.** One sentence at a time, Enter to advance. A hidden clock runs from
-   your first keystroke (not from when the sentence appeared) and pauses if you
-   wander off to the Stats tab, so the timing reflects typing and nothing else.
+2. **Type.** One sentence at a time, Enter to advance. Enter does nothing until
+   you've reached the end of the sentence: length, not correctness, so a
+   sentence typed wrong still counts as typed, but a half-typed one can't be
+   skipped past. A hidden clock runs from your first keystroke (not from when
+   the sentence appeared) and pauses if you wander off to the Stats tab, so the
+   timing reflects typing and nothing else.
 3. **End.** `POST /results` sends every sentence you finished. The backend
    records the drill and updates each target word's attempts / misses / streak.
    It also compares every *other* word in each sentence against what you typed,
    see **Earning a place on the list**. No model call: the session ends on
-   arithmetic alone. A transcript is written to `sessions/`.
+   arithmetic alone. A transcript is written to `sessions/`. Then you're back
+   at the start screen, the way Free Type ends. There's no results screen: the
+   Stats tab renders the same recap from the session that was just saved, and
+   one place for it is enough.
 
 **End session** quits early and keeps only the sentences you pressed Enter on.
 The half-typed one on screen is dropped: that's an interruption, not a
@@ -103,15 +109,19 @@ English words, ten rows of six, drawn by measured usage frequency from
 on your list are filtered out: re-drilling a word you've already flagged is what
 Practice is for, this mode is looking for the ones you don't know about.
 
-You type each word and press space. The word you're on is drawn character by
+You type each word and press space. Space is the only key that ends a word;
+Enter does nothing, so it can't bank a word you're half way through and skip the
+rest of it. The word you're on is drawn character by
 character with your attempt over it, so a letter you got wrong turns red where
 you got it wrong. Miss a word and it's dealt back into the board five words
 later, rather than repeating immediately, so you're recalling it instead of
 copying the line above. Miss the same word three times in one sitting and it
 joins your weak list.
 
-No model call, no timing, no score. Nothing here is recorded except a word that
-earns its way onto the list.
+No model call. Live wpm and accuracy sit above the board, on the same
+five-characters-to-a-word rule the Stats tab uses, but they're for the sitting
+you're in and go nowhere: nothing here is recorded except a word that earns its
+way onto the list.
 
 ## Earning a place on the list
 
@@ -198,7 +208,7 @@ backend/
   agent.py       The one model call: write the practice sentences.
   test_agent.py  Same function, canned. Used by the testing profile.
 frontend/src/
-  App.tsx        The whole UI: profile picker, practice, results, stats, words.
+  App.tsx        The whole UI: profile picker, practice, free type, stats, words.
   api.ts         The fetch calls, and the profile header.
   grade.ts       Aligns typed words to expected words and marks the targets.
   index.css      Tailwind import, page background, one keyframe. That's all.
@@ -215,8 +225,6 @@ empty: it gets the example list until `seed_words_personal.txt` exists.
   by index. Drop or insert a word mid-sentence and everything after it shifts,
   so correctly spelled words can be marked wrong. Fine for copy-typing, and it
   only affects the target words, which are a couple per sentence.
-- **Pasting works.** Nothing stops you pasting the sentence, which records
-  perfect accuracy and an absurd wpm.
 - **Only target words are scored.** The other words in a sentence are checked
   for misspellings (see above) but never recorded in `attempts`, so they have no
   accuracy or streak of their own until they earn a place on the list. Your raw
