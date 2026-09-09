@@ -198,6 +198,13 @@ def get_drills(profile: Profile):
     return {"words": words, "drills": [d.model_dump() for d in generated.drills]}
 
 
+@app.get("/punctuation-drills")
+def get_punctuation_drills(profile: Profile):
+    """Punctuation session start: one sentence per feature, no word list involved."""
+    generated = agent_for(profile).generate_punctuation_drills()
+    return {"drills": [d.model_dump() for d in generated.drills]}
+
+
 @app.get("/free-words")
 def get_free_words(profile: Profile):
     """Free Type: common words to fish for weaknesses you don't know about yet.

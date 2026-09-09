@@ -7,6 +7,7 @@ start. Set LLM_PROVIDER in .env to pick which provider runs it.
 from __future__ import annotations
 
 import os
+import random
 from pathlib import Path
 from typing import TypeVar
 
@@ -129,3 +130,57 @@ def generate_drills(words: list[str], count: int = 9) -> GeneratedDrills:
         "For each item, list which of the target words it contains."
     )
     return _parse(prompt, 1000, GeneratedDrills)
+
+
+# punctuation practice
+
+# One feature per sentence, on purpose: you're learning where a semicolon goes,
+# not juggling four rules at once. The capital that opens a sentence and the
+# mark that closes it are the baseline every sentence has, so neither counts as
+# a feature. Question and exclamation marks are the exception, since there the
+# closing mark is the thing being practiced.
+PUNCTUATION_FEATURES = [
+    "a comma separating items in a list",
+    "a comma after an introductory clause",
+    "a semicolon joining two independent clauses",
+    "a colon introducing an explanation",
+    "a hyphenated compound word",
+    "an apostrophe in a contraction",
+    "an apostrophe showing possession",
+    "quoted speech with the comma inside the closing quotation mark",
+    "a question mark",
+    "an exclamation mark",
+    "a capitalized proper noun in the middle of the sentence",
+]
+
+
+class PunctuationDrill(BaseModel):
+    sentence: str
+    feature: str
+
+
+class GeneratedPunctuationDrills(BaseModel):
+    drills: list[PunctuationDrill]
+
+
+def generate_punctuation_drills(count: int = 9) -> GeneratedPunctuationDrills:
+    """Punctuation session: one sentence per feature, nothing else in it.
+
+    A random `count` of the catalog rather than the first `count`, so a session
+    isn't the same nine marks every time.
+    """
+    features = random.sample(PUNCTUATION_FEATURES, min(count, len(PUNCTUATION_FEATURES)))
+    listed = "\n".join(f"{i}. {feature}" for i, feature in enumerate(features, start=1))
+    prompt = (
+        f"Write {len(features)} English typing-practice sentences of mixed length "
+        "(5 to 16 words), one for each item below, in order. Each sentence must "
+        "use exactly the one feature it is written for and no other punctuation "
+        "beyond the capital letter that opens it and the mark that closes it. "
+        "Rules: straight ASCII quotation marks and apostrophes only; one space "
+        "after every mark and never a space before one; no dashes of any kind "
+        "except the hyphen inside a compound word; every sentence ends with a "
+        "period, question mark, or exclamation mark. Keep them everyday and easy "
+        "to read. Return each sentence with its feature written exactly as "
+        "listed.\n\n" + listed
+    )
+    return _parse(prompt, 1000, GeneratedPunctuationDrills)
