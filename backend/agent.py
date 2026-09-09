@@ -139,18 +139,21 @@ def generate_drills(words: list[str], count: int = 9) -> GeneratedDrills:
 # mark that closes it are the baseline every sentence has, so neither counts as
 # a feature. Question and exclamation marks are the exception, since there the
 # closing mark is the thing being practiced.
-PUNCTUATION_FEATURES = [
-    "a comma separating items in a list",
-    "a comma after an introductory clause",
-    "a semicolon joining two independent clauses",
-    "a colon introducing an explanation",
-    "a hyphenated compound word",
-    "an apostrophe in a contraction",
-    "an apostrophe showing possession",
-    "quoted speech with the comma inside the closing quotation mark",
-    "a question mark",
-    "an exclamation mark",
-    "a capitalized proper noun in the middle of the sentence",
+#
+# Each feature is filed under the mark the grader reports it as (MARK_NAMES in
+# main.py), which is how a mark you keep missing finds its sentences.
+PUNCTUATION_FEATURES: list[tuple[str, str]] = [
+    ("comma", "a comma separating items in a list"),
+    ("comma", "a comma after an introductory clause"),
+    ("semicolon", "a semicolon joining two independent clauses"),
+    ("colon", "a colon introducing an explanation"),
+    ("hyphen", "a hyphenated compound word"),
+    ("apostrophe", "an apostrophe in a contraction"),
+    ("apostrophe", "an apostrophe showing possession"),
+    ("quotation mark", "quoted speech with the comma inside the closing quotation mark"),
+    ("question mark", "a question mark"),
+    ("exclamation mark", "an exclamation mark"),
+    ("capital", "a capitalized proper noun in the middle of the sentence"),
 ]
 
 
@@ -163,20 +166,36 @@ class GeneratedPunctuationDrills(BaseModel):
     drills: list[PunctuationDrill]
 
 
-def generate_punctuation_drills(count: int = 9) -> GeneratedPunctuationDrills:
+def generate_punctuation_drills(
+    weak_marks: list[str], count: int = 9
+) -> GeneratedPunctuationDrills:
     """Punctuation session: one sentence per feature, nothing else in it.
 
-    A random `count` of the catalog rather than the first `count`, so a session
-    isn't the same nine marks every time.
+    `weak_marks` are the marks you miss most, worst first. Their features go
+    into the session first so it can't drop them, and the rest of the catalog
+    fills the remaining slots at random so it isn't the same nine every time.
+    Nothing repeats. The prompt names the weak marks too, so those sentences
+    give you more of the mark to get wrong.
     """
-    features = random.sample(PUNCTUATION_FEATURES, min(count, len(PUNCTUATION_FEATURES)))
+    weak = [f for mark in weak_marks for m, f in PUNCTUATION_FEATURES if m == mark]
+    rest = [f for _, f in PUNCTUATION_FEATURES if f not in weak]
+    random.shuffle(rest)
+    features = (weak + rest)[:count]
     listed = "\n".join(f"{i}. {feature}" for i, feature in enumerate(features, start=1))
+    focus = (
+        f"The user most often gets these wrong: {', '.join(weak_marks)}. Where "
+        "the feature allows it, give those sentences more than one instance of "
+        "it, such as a longer list or two possessives. "
+        if weak_marks
+        else ""
+    )
     prompt = (
         f"Write {len(features)} English typing-practice sentences of mixed length "
         "(5 to 16 words), one for each item below, in order. Each sentence must "
         "use exactly the one feature it is written for and no other punctuation "
         "beyond the capital letter that opens it and the mark that closes it. "
-        "Rules: straight ASCII quotation marks and apostrophes only; one space "
+        + focus
+        + "Rules: straight ASCII quotation marks and apostrophes only; one space "
         "after every mark and never a space before one; no dashes of any kind "
         "except the hyphen inside a compound word; every sentence ends with a "
         "period, question mark, or exclamation mark. Keep them everyday and easy "

@@ -303,6 +303,31 @@ def record_punctuation_miss(mark: str, kind: str, sentence: str, typed: str) -> 
         )
 
 
+def get_punctuation_stats() -> list[dict]:
+    """Misses per mark, worst first, split into missing, extra, and wrong.
+
+    All-time rather than per-session: the question this answers is "what do I
+    keep getting wrong", and one session is too few sentences to say.
+    """
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT mark, kind, COUNT(*) AS count
+            FROM punctuation_misses
+            GROUP BY mark, kind
+            """
+        ).fetchall()
+    by_mark: dict[str, dict] = {}
+    for row in rows:
+        stat = by_mark.setdefault(
+            row["mark"],
+            {"mark": row["mark"], "missing": 0, "extra": 0, "wrong": 0, "total": 0},
+        )
+        stat[row["kind"]] += row["count"]
+        stat["total"] += row["count"]
+    return sorted(by_mark.values(), key=lambda stat: stat["total"], reverse=True)
+
+
 def get_typing_stats(session_id: int | None = None) -> dict[str, int]:
     """Words-per-minute across timed drills, or just one session's worth.
 

@@ -69,9 +69,20 @@ export interface TypingStats {
   avg_wpm: number;
 }
 
+/** One row of the punctuation table: a mark and how you've missed it. `total`
+ *  is the three kinds added up, worst first as the backend sends them. */
+export interface PunctuationStat {
+  mark: string;
+  missing: number;
+  extra: number;
+  wrong: number;
+  total: number;
+}
+
 export interface StatsResponse {
   words: WordStat[];
   typing: TypingStats;
+  punctuation: PunctuationStat[];
 }
 
 export interface NewWord {

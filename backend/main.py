@@ -290,8 +290,21 @@ def get_drills(profile: Profile):
 
 @app.get("/punctuation-drills")
 def get_punctuation_drills(profile: Profile):
-    """Punctuation session start: one sentence per feature, no word list involved."""
-    generated = agent_for(profile).generate_punctuation_drills()
+    """Punctuation session start: one sentence per feature, no word list involved.
+
+    The marks you've missed most steer which features come up. Two misses is the
+    floor, so one slip doesn't earn a mark a seat, and three marks is enough to
+    lean on without the session turning into one thing. Marks with no feature
+    behind them (a stray space, a dropped period) still show on the stats tab,
+    there's just no sentence to write for them.
+    """
+    drillable = {mark for mark, _ in agent.PUNCTUATION_FEATURES}
+    weak = [
+        stat["mark"]
+        for stat in db.get_punctuation_stats()
+        if stat["total"] >= 2 and stat["mark"] in drillable
+    ][:3]
+    generated = agent_for(profile).generate_punctuation_drills(weak)
     return {"drills": [d.model_dump() for d in generated.drills]}
 
 
@@ -349,8 +362,13 @@ def add_practice_word(payload: WordPayload, profile: Profile):
 
 @app.get("/stats")
 def get_stats(profile: Profile):
-    """Everything the stats tab shows: per-word counters plus typing speed."""
-    return {"words": db.get_all_words(), "typing": db.get_typing_stats()}
+    """Everything the stats tab shows: per-word counters, typing speed, and
+    the punctuation you keep missing."""
+    return {
+        "words": db.get_all_words(),
+        "typing": db.get_typing_stats(),
+        "punctuation": db.get_punctuation_stats(),
+    }
 
 
 @app.post("/results")

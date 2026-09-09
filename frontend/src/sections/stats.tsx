@@ -306,6 +306,35 @@ export function Stats({
           </section>
 
           <section>
+            <h2 className={HEADING}>punctuation you struggle with</h2>
+            {/* Worst first, the way the backend sends it. The three kinds
+                are spelled out rather than named missing/extra/wrong, since
+                "wrong one" says what happened and "wrong" alone doesn't. */}
+            <table className={TABLE}>
+              <thead>
+                <tr>
+                  <th>mark</th>
+                  <th>missed</th>
+                  <th>left out</th>
+                  <th>added</th>
+                  <th>wrong one</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.punctuation.map((p) => (
+                  <tr key={p.mark}>
+                    <td>{p.mark}</td>
+                    <td>{p.total}</td>
+                    <td>{p.missing}</td>
+                    <td>{p.extra}</td>
+                    <td>{p.wrong}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+
+          <section>
             <h2 className={HEADING}>sessions</h2>
             {/* Matches the typing input's look, so the dropdown reads as
                 part of the same UI instead of an unstyled browser

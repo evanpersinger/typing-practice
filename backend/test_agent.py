@@ -61,8 +61,11 @@ PUNCTUATION_DRILLS: list[tuple[str, str]] = [
 ]
 
 
-def generate_punctuation_drills(count: int = 9) -> GeneratedPunctuationDrills:
-    """The canned punctuation set, first `count` in catalog order."""
+def generate_punctuation_drills(
+    weak_marks: list[str] | None = None, count: int = 9
+) -> GeneratedPunctuationDrills:
+    """The canned punctuation set, first `count` in catalog order. `weak_marks`
+    is ignored, the same way `words` is above: nothing here steers."""
     return GeneratedPunctuationDrills(
         drills=[
             PunctuationDrill(sentence=sentence, feature=feature)

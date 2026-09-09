@@ -25,7 +25,8 @@ key in `.env` at the repo root, see below. Both ports are set in the `Makefile`.
 
 ## Providers
 
-The one model call runs against either Anthropic or OpenAI. `LLM_PROVIDER` in
+Both model calls (practice sentences, punctuation sentences) run against either
+Anthropic or OpenAI. `LLM_PROVIDER` in
 `.env` picks which, and it defaults to `anthropic`, so leaving it out keeps the
 behaviour this app has always had.
 
@@ -39,7 +40,7 @@ Only the key for the provider you're actually using has to be set. Pick one
 whose key is missing and the server names the variable it wants, rather than
 failing halfway through a session with whatever the SDK throws.
 
-The model per provider lives in `MODELS` in `backend/agent.py`. The prompt is
+The model per provider lives in `MODELS` in `backend/agent.py`. The prompts are
 byte-identical either way; the only thing that differs is the SDK call that
 forces the structured output, and that branch lives in `_parse()` and nowhere
 else.
@@ -65,6 +66,7 @@ time you load the page. Nothing is remembered, on purpose.
 | database | `typing.db` | `typing_test.db` |
 | transcripts | `sessions/` | `sessions_test/` |
 | sentences | written by the model, from your weak words | canned, fixed (`backend/test_agent.py`) |
+| punctuation sentences | written by the model, your weak marks first | canned, fixed (same file) |
 | session start | 10-30s | instant |
 
 Separate files, not a flag on a row. Test data cannot reach your real numbers
@@ -122,6 +124,49 @@ No model call. Live wpm and accuracy sit above the board, on the same
 five-characters-to-a-word rule the Stats tab uses, but they're for the sitting
 you're in and go nowhere: nothing here is recorded except a word that earns its
 way onto the list.
+
+## Punctuation
+
+The **Punctuation** tab drills the marks rather than the words. A session is
+nine sentences, and each one exercises exactly one feature from a fixed
+catalog: a comma in a list, a comma after an introductory clause, a semicolon
+between two clauses, a colon before an explanation, a hyphenated compound, an
+apostrophe in a contraction, a possessive, quoted speech with the comma inside
+the quotes, a question mark, an exclamation mark, a proper noun mid-sentence.
+One feature per sentence is the rule, not a limit of the prompt: you're
+learning where a semicolon goes, not juggling four rules at once. The capital
+that opens a sentence and the mark that closes it are the baseline every
+sentence has, so they don't count as a feature.
+
+The model writes them (`GET /punctuation-drills`), one sentence per feature,
+under the same rules every time: straight ASCII quotes and apostrophes, one
+space after every mark and never before, no dashes except the hyphen inside a
+compound. Nine of the eleven features come up each session, and the marks
+you've missed most go in first so a session can't drop them. Two misses is the
+floor before a mark counts as weak and three marks is the most the prompt leans
+on, and it names them so those sentences carry more of the mark. The testing
+profile gets a canned set, same as Practice.
+
+You type the sentence the way Practice works, with one difference: the letters
+grade case-sensitively, so a lowercase letter typed for a capital turns red.
+Enter advances once you've reached the end by length, the same gate as
+Practice.
+
+Spelling isn't graded here. `POST /punctuation-results` sends only the sentence
+and what you typed, and the backend diffs them character by character
+(`find_punctuation_misses` in `backend/main.py`). Each difference is filed by
+the character involved: a mark that's missing, extra, or the wrong one; a
+capital that's missing or extra; a space that's missing or extra. A letter typo
+falls out of the diff untouched, that's Practice's job. A space typed where a
+hyphen goes is one missing hyphen, not a missing hyphen plus an extra space.
+Trailing whitespace is stripped first, so a space typed at the end to satisfy
+the gate doesn't count.
+
+Every miss is a row in `punctuation_misses`: the mark, the kind, the sentence,
+and what you typed. No session row, no transcript, no wpm: a punctuation
+sitting is its own thing. The Stats tab has a **punctuation you struggle with**
+table, all-time, worst first, with the three kinds split out. Then you're back
+at the start screen.
 
 ## Earning a place on the list
 
@@ -194,6 +239,9 @@ SQLite, all of it in `backend/db.py`:
   took. Words-per-minute comes from here.
 - `sessions` — one row per sitting. `attempts` and `drills` both point at it.
 - `session_new_words` — the words a session put on your list, with the reason.
+- `punctuation_misses` — one row per punctuation miss: the mark, whether it
+  was missing, extra, or the wrong one, the sentence, and what you typed.
+  Nothing points at `sessions`; punctuation sittings aren't sessions.
 
 Ten clean hits in a row graduates a word to `mastered`. One miss puts it
 straight back into `drilling`.
@@ -205,7 +253,7 @@ let a four-word sentence count as much as a long one.
 ## Layout
 
 - `backend/` — FastAPI server. `main.py` wires up the routes, `db.py`
-  owns all storage and arithmetic, `agent.py`/`test_agent.py` own the model call.
+  owns all storage and arithmetic, `agent.py`/`test_agent.py` own the model calls.
   Nothing else in the app touches SQLite or a model directly.
 - `frontend/` — React + Vite single-page app. Talks to the backend
   through the `/api` proxy; no server-side rendering, no router, one page.
@@ -222,9 +270,10 @@ let a four-word sentence count as much as a long one.
 
 ```
 backend/
-  main.py        FastAPI: /drills, /free-words, /stats, /results, /words, /sessions.
+  main.py        FastAPI: /drills, /punctuation-drills, /free-words, /stats,
+                 /results, /punctuation-results, /words, /sessions.
   db.py          All storage and all arithmetic. The agent never does math.
-  agent.py       The one model call: write the practice sentences.
+  agent.py       The two model calls: practice sentences, punctuation sentences.
   test_agent.py  Same function, canned. Used by the testing profile.
 frontend/src/
   App.tsx        The shell: profile picker, tab bar, layout, and the wiring.
@@ -233,7 +282,9 @@ frontend/src/
   ui.ts          The few things two sections both need. Nothing else.
   index.css      Tailwind import, page background, one keyframe. That's all.
 frontend/src/sections/
-  practice.tsx   usePractice() + the sentence screen. Owns the drill clock.
+  practice.tsx   usePractice() + the sentence screen. Owns the drill clock and
+                 the SentenceBoard both sentence tabs type into.
+  punctuation.tsx usePunctuation() + its screen. Practice's shape, no clock.
   freeType.tsx   useFreeType() + the word board.
   stats.tsx      useStats() + the stats screen and one past session's recap.
   words.tsx      useWords() + the weak-word board and the add-a-word panel.
@@ -255,3 +306,10 @@ empty: it gets the example list until `seed_words_personal.txt` exists.
   for misspellings (see above) but never recorded in `attempts`, so they have no
   accuracy or streak of their own until they earn a place on the list. Your raw
   text is in `drills.typed` either way, so that could be filled in retroactively.
+- **Punctuation's gate hides a dropped last mark.** Enter needs the typed length
+  to reach the sentence's, so a period left off the end can't be submitted as
+  missing: you have to type something to get there. Mid-sentence misses are the
+  ones this mode actually catches.
+- **A dropped mark shifts the highlight.** The letters are drawn by position, so
+  after a comma you left out every letter reads red until the sentence ends.
+  Display only: the backend diff aligns properly.
