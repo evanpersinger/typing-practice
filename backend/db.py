@@ -126,6 +126,15 @@ def init_db() -> None:
                 session_id  INTEGER REFERENCES sessions(id),
                 timestamp   TEXT NOT NULL DEFAULT (datetime('now'))
             );
+
+            CREATE TABLE IF NOT EXISTS punctuation_misses (
+                id        INTEGER PRIMARY KEY,
+                mark      TEXT NOT NULL,
+                kind      TEXT NOT NULL,
+                sentence  TEXT NOT NULL,
+                typed     TEXT NOT NULL,
+                timestamp TEXT NOT NULL DEFAULT (datetime('now'))
+            );
             """
         )
         # Tables created before sessions existed keep their old shape, because
@@ -277,6 +286,20 @@ def record_drill(
             VALUES (?, ?, ?, ?)
             """,
             (sentence, typed, duration_ms, session_id),
+        )
+
+
+def record_punctuation_miss(mark: str, kind: str, sentence: str, typed: str) -> None:
+    """Log one punctuation miss: which mark, and whether it was missing, extra,
+    or the wrong one. A row per miss rather than a counter per mark, so the
+    stats tab can show the sentence it happened in."""
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO punctuation_misses (mark, kind, sentence, typed)
+            VALUES (?, ?, ?, ?)
+            """,
+            (mark, kind, sentence, typed),
         )
 
 

@@ -4,6 +4,7 @@ FastAPI app wiring the local trainer together.
 
 from __future__ import annotations
 
+import difflib
 import random
 import re
 from contextlib import asynccontextmanager
@@ -157,6 +158,86 @@ def find_misspellings(sentence: str, typed: str) -> list[tuple[str, str]]:
     return found
 
 
+# What a punctuation miss gets filed under. Names rather than the characters
+# themselves, so the stats tab can say "comma" instead of ",". A mark that isn't
+# listed is filed under its own character.
+MARK_NAMES = {
+    ".": "period",
+    ",": "comma",
+    ";": "semicolon",
+    ":": "colon",
+    "-": "hyphen",
+    "'": "apostrophe",
+    '"': "quotation mark",
+    "?": "question mark",
+    "!": "exclamation mark",
+}
+
+
+def _slot_name(char: str) -> str | None:
+    """What this character counts as: "space", a mark name, or None for a letter
+    or digit, which this mode doesn't grade."""
+    if char.isspace():
+        return "space"
+    if char.isalnum():
+        return None
+    return MARK_NAMES.get(char, char)
+
+
+def _classify_pair(expected: str, typed: str) -> list[tuple[str, str]]:
+    """One expected character against the one typed in its place."""
+    if expected.isalpha() and typed.isalpha():
+        if expected.lower() != typed.lower():
+            return []  # a letter typo, which is Practice's business
+        return [("capital", "missing" if expected.isupper() else "extra")]
+    expected_name, typed_name = _slot_name(expected), _slot_name(typed)
+    if expected_name and typed_name:
+        if "space" not in (expected_name, typed_name):
+            return [(expected_name, "wrong")]  # a mark, but not the right one
+        # A space where a mark goes, or a mark where a space goes: one miss,
+        # filed under the mark. The space is only there because of it.
+        if typed_name == "space":
+            return [(expected_name, "missing")]
+        return [(typed_name, "extra")]
+    misses = []
+    if expected_name:
+        misses.append((expected_name, "missing"))
+    if typed_name:
+        misses.append((typed_name, "extra"))
+    return misses
+
+
+def find_punctuation_misses(sentence: str, typed: str) -> list[tuple[str, str]]:
+    """Where `typed` departs from `sentence` in punctuation, case, or spacing.
+
+    Returned as (mark, kind) pairs: ("comma", "missing"), ("capital", "extra"),
+    ("space", "extra"). A character-level diff rather than the positional word
+    alignment the spelling grader uses, because the misses here are the very
+    things that break a word split: a space before a period is a token of its
+    own. Letter typos fall out of the diff untouched, they're Practice's job.
+    """
+    typed = typed.strip()
+    found: list[tuple[str, str]] = []
+    matcher = difflib.SequenceMatcher(None, sentence, typed)
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            continue
+        expected_run, typed_run = sentence[i1:i2], typed[j1:j2]
+        # Same length is the only case where pairing characters up means
+        # anything, and the one that catches a capital typed lowercase.
+        if tag == "replace" and len(expected_run) == len(typed_run):
+            for pair in zip(expected_run, typed_run):
+                found.extend(_classify_pair(*pair))
+            continue
+        for char in expected_run:
+            if name := _slot_name(char):
+                found.append((name, "missing"))
+        for char in typed_run:
+            if name := _slot_name(char):
+                found.append((name, "extra"))
+    return found
+
+
 class WordResult(BaseModel):
     word: str
     typed: str
@@ -176,6 +257,15 @@ class ResultsPayload(BaseModel):
 
 class WordPayload(BaseModel):
     word: str
+
+
+class PunctuationDrillResult(BaseModel):
+    sentence: str
+    typed: str
+
+
+class PunctuationResultsPayload(BaseModel):
+    results: list[PunctuationDrillResult]
 
 
 @app.get("/drills")
@@ -308,6 +398,21 @@ def submit_results(payload: ResultsPayload, profile: Profile):
         "new_words": earned,
         "typing": db.get_typing_stats(session_id),
     }
+
+
+@app.post("/punctuation-results")
+def submit_punctuation_results(payload: PunctuationResultsPayload, profile: Profile):
+    """Punctuation session end: file every miss, no model call.
+
+    Nothing here touches words, wpm, transcripts, or the sessions table: a
+    punctuation session is its own thing and its rows live in their own table.
+    """
+    misses: list[dict] = []
+    for drill in payload.results:
+        for mark, kind in find_punctuation_misses(drill.sentence, drill.typed):
+            db.record_punctuation_miss(mark, kind, drill.sentence, drill.typed)
+            misses.append({"mark": mark, "kind": kind, "sentence": drill.sentence})
+    return {"misses": misses}
 
 
 @app.get("/sessions")
