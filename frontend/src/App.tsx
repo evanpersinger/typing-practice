@@ -2,11 +2,12 @@ import { useState } from "react";
 import { setProfile, type Profile } from "./api";
 import { FreeType, useFreeType } from "./sections/freeType";
 import { Practice, usePractice } from "./sections/practice";
+import { Punctuation, usePunctuation } from "./sections/punctuation";
 import { Roadmap } from "./sections/roadmap";
 import { Stats, useStats } from "./sections/stats";
 import { Words, useWords } from "./sections/words";
 
-type Tab = "practice" | "stats" | "words" | "free" | "roadmap";
+type Tab = "practice" | "punctuation" | "stats" | "words" | "free" | "roadmap";
 
 // The four nav buttons. Boxes rather than underlined text, so the active one is
 // a faint fill instead of a border: the border is on all four now. Only the
@@ -16,9 +17,11 @@ type Tab = "practice" | "stats" | "words" | "free" | "roadmap";
 // the words you're being tested on. The literal has to be written out at each
 // use: Tailwind scans the source for class strings, so a colour interpolated
 // from a variable never gets a rule generated for it.
+// nowrap because six tabs is enough for the absolute nav to run out of width,
+// and the first thing to give was "Free Type" breaking over two lines.
 const TAB =
   "cursor-pointer rounded-lg border border-[#c2a878] px-6 py-2.5 " +
-  "text-[1.8rem] text-[#c2a878] no-underline";
+  "text-[1.8rem] whitespace-nowrap text-[#c2a878] no-underline";
 const TAB_ON = `${TAB} bg-[#c2a878]/15`;
 const TAB_OFF = `${TAB} hover:bg-[#c2a878]/8`;
 
@@ -49,6 +52,9 @@ export default function App() {
   // only the JSX below is conditional, never the state.
   const practice = usePractice(tab === "practice", setError);
   const freeType = useFreeType(tab === "free", setError);
+  // Practice's shape without the clock, called here for the same reason:
+  // the tab's JSX is conditional, its session isn't.
+  const punctuation = usePunctuation(tab === "punctuation", setError);
   // Stats owns the word list because the Words tab reads the same one:
   // one fetch, one copy, so the two screens can never disagree about it.
   const stats = useStats(setError);
@@ -61,6 +67,7 @@ export default function App() {
     setError(null);
     stats.reset();
     practice.reset();
+    punctuation.reset();
     freeType.reset();
   }
 
@@ -72,6 +79,7 @@ export default function App() {
     setError(null);
     stats.reset();
     practice.reset();
+    punctuation.reset();
     freeType.reset();
   }
 
@@ -108,6 +116,12 @@ export default function App() {
     setError(null);
   }
 
+  function openPunctuation() {
+    practice.stopClock(); // same as every other tab on the way out of Practice
+    setTab("punctuation");
+    setError(null);
+  }
+
   // The list screens and the start screen sit at the top. Everything else stays
   // centered, so a sentence you're typing lands under your eyes. Loading holds
   // the start screen's position, since it's still the start screen on display.
@@ -136,6 +150,13 @@ export default function App() {
               // under the tab bar.
               "mx-auto mt-16 mb-0 self-start"
             : "mx-auto mt-48 mb-0 w-full max-w-[880px] self-start"
+          : tab === "punctuation"
+            ? punctuation.phase === "typing"
+              ? // Same width as the practice sentence, for the same reason.
+                "m-auto w-full max-w-[1200px]"
+              : // Start screen, spinner, and the submitting line are all two
+                // short lines, so they sit where Practice's start screen sits.
+                "mx-auto mt-48 mb-0 w-full max-w-[880px] self-start"
           : practice.phase === "idle" || practice.phase === "loading"
           ? // The start screen is two short lines; centering them leaves the
             // button floating in an empty page, so it sits high instead. The top
@@ -159,18 +180,22 @@ export default function App() {
   const endTyping =
     tab === "practice" && practice.phase === "typing"
       ? practice.end
-      : tab === "free" && freeType.phase === "typing"
-        ? freeType.reset
-        : null;
+      : tab === "punctuation" && punctuation.phase === "typing"
+        ? punctuation.end
+        : tab === "free" && freeType.phase === "typing"
+          ? freeType.reset
+          : null;
 
   const intro =
     tab === "practice" && practice.phase !== "typing"
       ? "These sentences include the words you need to practice. Type one sentence at a time. Your results are saved when the session ends, and the stats tab has them."
-      : tab === "free" && freeType.phase !== "typing"
-        ? "Freely type and get graded on your wpm, accuracy, and what words you misspell the most often."
-        : tab === "roadmap"
-          ? "Each square is a section to finish. The car is how far down the road you've got."
-          : null;
+      : tab === "punctuation" && punctuation.phase !== "typing"
+        ? "Each sentence practices one punctuation mark. Type it exactly, capitals included. Spelling isn't graded here, only punctuation, capitals, and spacing."
+        : tab === "free" && freeType.phase !== "typing"
+          ? "Freely type and get graded on your wpm, accuracy, and what words you misspell the most often."
+          : tab === "roadmap"
+            ? "Each square is a section to finish. The car is how far down the road you've got."
+            : null;
 
   if (profile === null) {
     return (
@@ -223,6 +248,12 @@ export default function App() {
           Free Type
         </button>
         <button
+          className={tab === "punctuation" ? TAB_ON : TAB_OFF}
+          onClick={openPunctuation}
+        >
+          Punctuation
+        </button>
+        <button
           className={tab === "roadmap" ? TAB_ON : TAB_OFF}
           onClick={openRoadmap}
         >
@@ -256,6 +287,10 @@ export default function App() {
 
       <div className={cardClass}>
         {tab === "practice" && <Practice state={practice} error={error} />}
+
+        {tab === "punctuation" && (
+          <Punctuation state={punctuation} error={error} />
+        )}
 
         {tab === "roadmap" && <Roadmap />}
 

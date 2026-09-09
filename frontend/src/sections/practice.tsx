@@ -5,6 +5,7 @@ import {
   useState,
   type ChangeEvent,
   type KeyboardEvent,
+  type RefObject,
 } from "react";
 import { fetchDrills, submitResults, type Drill } from "../api";
 import { gradeDrill } from "../grade";
@@ -27,20 +28,27 @@ const PROMPT_BOARD = `${WORD_SURFACE} px-14 py-12`;
 // The sentence you're copying, drawn character by character against what you've
 // typed so far. Same three states and the same caret as the Free Type board, so a
 // grey letter means the same thing in both modes: one you haven't reached yet.
-function PromptText({ sentence, typed }: { sentence: string; typed: string }) {
+function PromptText({
+  sentence,
+  typed,
+  strict = false,
+}: {
+  sentence: string;
+  typed: string;
+  strict?: boolean;
+}) {
   const letters = [...sentence];
   // What you typed past the end of the sentence, rendered rather than dropped:
   // you should see what you actually typed. Inline rather than out of flow like
   // the board's, since there's nothing after the sentence for it to shove along.
   const overflow = typed.slice(letters.length);
-  // Case-insensitive, the same as normalize() and the board: a capital you typed
-  // lowercase still grades correct, so it can't render red.
+  // Case-insensitive by default, the same as normalize() and the board: a capital
+  // you typed lowercase still grades correct, so it can't render red. `strict`
+  // is the punctuation tab's, where that capital is exactly the miss.
+  const matches = (char: string, i: number) =>
+    strict ? typed[i] === char : typed[i].toLowerCase() === char.toLowerCase();
   const letterClass = (char: string, i: number) =>
-    i >= typed.length
-      ? FREE_PENDING
-      : typed[i].toLowerCase() === char.toLowerCase()
-        ? ""
-        : FREE_MISS;
+    i >= typed.length ? FREE_PENDING : matches(char, i) ? "" : FREE_MISS;
 
   return (
     <>
@@ -55,6 +63,60 @@ function PromptText({ sentence, typed }: { sentence: string; typed: string }) {
       {overflow && <span className={FREE_MISS}>{overflow}</span>}
       {typed.length >= letters.length && <span className={FREE_CARET} />}
     </>
+  );
+}
+
+/**
+ * The board and the invisible input behind it: everything between the sentence
+ * on screen and your keystrokes. Practice's first, and the punctuation tab's
+ * too, because the input's attributes (no paste, no autocorrect) are exactly
+ * the kind of thing that drifts when copied. Mount it with a key per sentence
+ * so the input starts fresh each time.
+ *
+ * On the board rather than loose on the wall photo, and the only copy of the
+ * sentence on screen: you type into this line, so a second copy of your own
+ * text under it is just noise. Clicking anywhere on the board puts the cursor
+ * back, since the input catching your keystrokes is off screen.
+ */
+export function SentenceBoard({
+  sentence,
+  typed,
+  strict,
+  inputRef,
+  onChange,
+  onKeyDown,
+}: {
+  sentence: string;
+  typed: string;
+  strict?: boolean;
+  inputRef: RefObject<HTMLInputElement>;
+  onChange: (e: ChangeEvent<HTMLInputElement>) => void;
+  onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
+}) {
+  return (
+    <div className={PROMPT_BOARD} onClick={() => inputRef.current?.focus()}>
+      <p className="font-mono text-[2.6rem] leading-[1.6]">
+        <PromptText sentence={sentence} typed={typed} strict={strict} />
+      </p>
+      {/* Invisible on purpose, the same as the Free Type board's: what you
+          type is drawn into the sentence above. Fixed to the corner of the
+          viewport, so unlike the board's there's no scroll for focusing it
+          to throw: one sentence, no page under it to move. */}
+      <input
+        ref={inputRef}
+        className="fixed top-0 left-0 size-px opacity-0"
+        value={typed}
+        onChange={onChange}
+        onKeyDown={onKeyDown}
+        // Pasting the sentence in is not typing it. It also lands a drill of
+        // a few milliseconds in the database, which clears the duration
+        // filter the wpm average is built on and drags that average for good.
+        onPaste={(e) => e.preventDefault()}
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
+      />
+    </div>
   );
 }
 
@@ -288,37 +350,14 @@ export function Practice({
 
       {phase === "typing" && drills[index] && (
         <>
-          {/* On the board rather than loose on the wall photo, and the only
-              copy of the sentence on screen: you type into this line, so a
-              second copy of your own text under it is just noise.
-              Clicking anywhere on the board puts the cursor back, since the
-              input catching your keystrokes is off screen. */}
-          <div className={PROMPT_BOARD} onClick={() => inputRef.current?.focus()}>
-            <p className="font-mono text-[2.6rem] leading-[1.6]">
-              <PromptText sentence={drills[index].sentence} typed={current} />
-            </p>
-            {/* Invisible on purpose, the same as the Free Type board's:
-                what you type is drawn into the sentence above. Fixed to the
-                corner of the viewport, so unlike the board's there's no
-                scroll for focusing it to throw: one sentence, no page under
-                it to move. */}
-            <input
-              key={index}
-              ref={inputRef}
-              className="fixed top-0 left-0 size-px opacity-0"
-              value={current}
-              onChange={handleChange}
-              onKeyDown={handleKeyDown}
-              // Pasting the sentence in is not typing it. It also lands a
-              // drill of a few milliseconds in the database, which clears
-              // the duration filter the wpm average is built on and drags
-              // that average for good.
-              onPaste={(e) => e.preventDefault()}
-              autoComplete="off"
-              autoCorrect="off"
-              spellCheck={false}
-            />
-          </div>
+          <SentenceBoard
+            key={index}
+            sentence={drills[index].sentence}
+            typed={current}
+            inputRef={inputRef}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+          />
           {error && <p className="mt-4 text-[#ff7a70]">{error}</p>}
         </>
       )}

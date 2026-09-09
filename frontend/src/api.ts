@@ -29,6 +29,18 @@ export interface DrillsResponse {
   drills: Drill[];
 }
 
+/** A punctuation sentence. `feature` is the one mark it exercises, in the
+ *  catalog's own words. Nothing on the frontend reads it yet. */
+export interface PunctuationDrill {
+  sentence: string;
+  feature: string;
+}
+
+export interface PunctuationDrillResult {
+  sentence: string;
+  typed: string;
+}
+
 export interface WordResult {
   word: string;
   typed: string;
@@ -152,4 +164,31 @@ export async function submitResults(
   });
   if (!res.ok) throw new Error(`Failed to submit results (${res.status})`);
   return res.json();
+}
+
+export async function fetchPunctuationDrills(): Promise<{
+  drills: PunctuationDrill[];
+}> {
+  const res = await fetch(`${API_BASE}/punctuation-drills`, {
+    headers: headers(),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch punctuation drills (${res.status})`);
+  }
+  return res.json();
+}
+
+/** Only the sentence and what you typed. The backend grades this mode, unlike
+ *  Practice, so there's one punctuation grader rather than two. */
+export async function submitPunctuationResults(
+  results: PunctuationDrillResult[],
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/punctuation-results`, {
+    method: "POST",
+    headers: headers({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ results }),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to submit punctuation results (${res.status})`);
+  }
 }
