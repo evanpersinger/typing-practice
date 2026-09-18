@@ -11,6 +11,7 @@ import random
 from pathlib import Path
 from typing import TypeVar
 
+import requests
 from anthropic import Anthropic
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -31,6 +32,11 @@ OpenAI:
 gpt-5             full model, better prose, slower and pricier
 gpt-5-mini        middle option, closest match to Haiku
 gpt-5-nano        smallest and cheapest
+
+Local (Ollama, free, no API key, no internet):
+qwen3.5:4b        default, lighter sibling of qwen3.5:9b, pulled for this
+gemma4:12b        also pulled locally, pure text rather than vision
+qwen3.5:9b        also pulled locally, heavier, strained this machine
 """
 
 MODELS = {
@@ -40,11 +46,16 @@ MODELS = {
 
 # The env var each provider's SDK reads its key from. Checked up front so a
 # missing key says which one is missing, instead of surfacing as an SDK error
-# halfway through a session.
+# halfway through a session. Local has no entry: Ollama needs no key at all.
 KEY_VARS = {
     "anthropic": "ANTHROPIC_API_KEY",
     "openai": "OPENAI_API_KEY",
 }
+
+# Where the local Ollama daemon listens, and which pulled model to ask it for.
+# Override either in .env if your setup differs.
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3.5:4b")
 
 # Anthropic stays the default, so an existing .env keeps working untouched.
 PROVIDER = os.getenv("LLM_PROVIDER", "anthropic").strip().lower()
@@ -58,7 +69,8 @@ def _get_client() -> Anthropic | OpenAI:
     if _client is None:
         if PROVIDER not in MODELS:
             raise RuntimeError(
-                f"LLM_PROVIDER is {PROVIDER!r}, expected one of {sorted(MODELS)}."
+                f"LLM_PROVIDER is {PROVIDER!r}, expected one of "
+                f"{sorted([*MODELS, 'local'])}."
             )
         if not os.getenv(KEY_VARS[PROVIDER]):
             raise RuntimeError(
@@ -73,12 +85,46 @@ def _get_client() -> Anthropic | OpenAI:
 T = TypeVar("T", bound=BaseModel)
 
 
+def _parse_local(prompt: str, output_format: type[T]) -> T:
+    """The local path: Ollama's own REST API instead of an SDK, no client and no key.
+
+    `format` is `output_format`'s JSON schema, which Ollama uses to constrain
+    decoding rather than just asking nicely for JSON, the same structured-output
+    guarantee `messages.parse`/`responses.parse` give the other two providers.
+    """
+    try:
+        response = requests.post(
+            f"{OLLAMA_HOST}/api/chat",
+            json={
+                "model": OLLAMA_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "format": output_format.model_json_schema(),
+                "stream": False,
+                # Deterministic, same reasoning as every other provider here:
+                # this is a structured drill, not a conversation.
+                "options": {"temperature": 0},
+            },
+            timeout=120,
+        )
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(
+            f"Ollama not reachable at {OLLAMA_HOST}. Run `ollama serve` "
+            "(or open the Ollama app)."
+        ) from e
+
+    return output_format.model_validate_json(response.json()["message"]["content"])
+
+
 def _parse(prompt: str, max_tokens: int, output_format: type[T]) -> T:
     """One structured-output call, forced into `output_format`.
 
-    The prompts are identical whichever provider is running, only the two SDKs'
-    parse methods differ, so the branch lives here and nowhere else.
+    The prompts are identical whichever provider is running, only the parse
+    mechanics differ, so the branch lives here and nowhere else.
     """
+    if PROVIDER == "local":
+        return _parse_local(prompt, output_format)
+
     client = _get_client()
     model = MODELS[PROVIDER]
 

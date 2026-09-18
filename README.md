@@ -25,7 +25,7 @@ make backend
 make frontend
 ```
 
-Open the URL from `make frontend`. Needs an API key in `.env` at the repo root (see `.env.example`).
+Open the URL from `make frontend`. Needs an API key in `.env` at the repo root (see `.env.example`), unless you're running the local provider (see Setup).
 
 Both ports are set in the `Makefile`.
 
@@ -51,6 +51,8 @@ LLM_PROVIDER=openai  # or omit this to use Anthropic by default
 ```
 
 Only set the keys you're actually using. If a provider's key is missing, the server prints which variable it needs rather than crashing.
+
+Or run it free, locally: set `LLM_PROVIDER=local` and have [Ollama](https://ollama.com) running with a text model pulled (`OLLAMA_MODEL`, defaults to `qwen3.5:4b`). No key and no internet needed, but slower and only as good as the model you've got pulled.
 
 ## Known rough edges
 
