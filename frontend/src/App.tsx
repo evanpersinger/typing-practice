@@ -83,17 +83,37 @@ export default function App() {
     freeType.reset();
   }
 
+  /** Called on every tab switch, before the tab actually changes. A session
+   *  you're mid-typing when you wander off gets thrown away rather than
+   *  paused: only a session you see through to the end gets tracked. Reads
+   *  `tab`, the one you're leaving, not the one you're headed to, so it works
+   *  the same regardless of which of the six buttons sent you here. */
+  function leaveSessionTabs() {
+    if (tab === "practice" && practice.phase === "typing") {
+      practice.abandon();
+    } else {
+      practice.stopClock();
+    }
+    if (tab === "punctuation" && punctuation.phase === "typing") {
+      punctuation.abandon();
+    }
+  }
+
+  function openPractice() {
+    leaveSessionTabs();
+    setTab("practice");
+  }
+
   async function openStats() {
-    practice.stopClock(); // freeze the sentence timer while you're off reading stats
+    leaveSessionTabs();
     setTab("stats");
     setError(null);
     await stats.open();
   }
 
-  // Nothing to fetch yet: the road is drawn from constants. It still stops the
-  // clock, for the same reason every other tab does.
+  // Nothing to fetch yet: the road is drawn from constants.
   function openRoadmap() {
-    practice.stopClock();
+    leaveSessionTabs();
     setTab("roadmap");
     setError(null);
   }
@@ -102,7 +122,7 @@ export default function App() {
    *  than adding one of its own, and skips the sessions fetch that Stats needs:
    *  there's no session dropdown on this tab. */
   async function openWords() {
-    practice.stopClock(); // same as Stats — reading your list isn't typing time
+    leaveSessionTabs();
     setTab("words");
     setError(null);
     await words.open();
@@ -111,13 +131,13 @@ export default function App() {
   /** Open the tab without starting anything, same as Practice. Switching tabs
    *  mid-thought shouldn't begin a session you didn't ask for. */
   function openFreeType() {
-    practice.stopClock(); // free typing isn't practice time, don't let it count
+    leaveSessionTabs();
     setTab("free");
     setError(null);
   }
 
   function openPunctuation() {
-    practice.stopClock(); // same as every other tab on the way out of Practice
+    leaveSessionTabs();
     setTab("punctuation");
     setError(null);
   }
@@ -231,7 +251,7 @@ export default function App() {
       <nav className="absolute top-7 left-1/2 flex -translate-x-1/2 gap-6">
         <button
           className={tab === "practice" ? TAB_ON : TAB_OFF}
-          onClick={() => setTab("practice")}
+          onClick={openPractice}
         >
           Practice
         </button>

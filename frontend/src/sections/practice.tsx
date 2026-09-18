@@ -254,6 +254,16 @@ export function usePractice(
     void finish(typed, durations, index);
   }
 
+  /** Leaving the tab mid-sentence throws the whole attempt away, no submit at
+   *  all: unlike `end`, a deliberate quit that keeps what you finished, this
+   *  is what happens when you wander off to another tab without meaning to
+   *  end anything. Only a session you actually finish gets tracked. */
+  function abandon() {
+    stopClock();
+    reset();
+    setPhase("idle");
+  }
+
   function nextSentence() {
     const updatedTyped = [...typed];
     updatedTyped[index] = current;
@@ -297,6 +307,7 @@ export function usePractice(
     inputRef,
     start,
     end,
+    abandon,
     reset,
     stopClock,
     handleChange,
