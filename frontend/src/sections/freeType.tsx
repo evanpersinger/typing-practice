@@ -5,6 +5,7 @@ import {
   FREE_CARET,
   FREE_MISS,
   FREE_PENDING,
+  SESSION_INTRO,
   START_BUTTON,
   WORD_SURFACE,
   pct,
@@ -343,6 +344,10 @@ export function FreeType({
           <button className={START_BUTTON} onClick={start}>
             Start session
           </button>
+          <p className={SESSION_INTRO}>
+            Freely type and get graded on your wpm, accuracy, and what words
+            you misspell the most often.
+          </p>
           {error && <p className="mt-4 text-[#ff7a70]">{error}</p>}
         </>
       )}

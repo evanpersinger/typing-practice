@@ -187,15 +187,9 @@ export default function App() {
           : null;
 
   const intro =
-    tab === "practice" && practice.phase !== "typing"
-      ? "These sentences include the words you need to practice. Type one sentence at a time. Your results are saved when the session ends, and the stats tab has them."
-      : tab === "punctuation" && punctuation.phase !== "typing"
-        ? "Each sentence practices one punctuation mark. Type it exactly, capitals included. Spelling isn't graded here, only punctuation, capitals, and spacing."
-        : tab === "free" && freeType.phase !== "typing"
-          ? "Freely type and get graded on your wpm, accuracy, and what words you misspell the most often."
-          : tab === "roadmap"
-            ? "Each square is a section to finish. The car is how far down the road you've got."
-            : null;
+    tab === "roadmap"
+      ? "Each square is a section to finish. The car is how far down the road you've got."
+      : null;
 
   if (profile === null) {
     return (

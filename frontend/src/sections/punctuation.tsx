@@ -10,7 +10,7 @@ import {
   submitPunctuationResults,
   type PunctuationDrill,
 } from "../api";
-import { START_BUTTON } from "../ui";
+import { SESSION_INTRO, START_BUTTON } from "../ui";
 import { SentenceBoard, type Phase } from "./practice";
 
 /**
@@ -160,6 +160,11 @@ export function Punctuation({
           <button className={START_BUTTON} onClick={start}>
             Start session
           </button>
+          <p className={SESSION_INTRO}>
+            Each sentence practices one punctuation mark. Type it exactly,
+            capitals included. Spelling isn't graded here, only punctuation,
+            capitals, and spacing.
+          </p>
           {error && <p className="mt-4 text-[#ff7a70]">{error}</p>}
         </>
       )}

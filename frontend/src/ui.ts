@@ -38,6 +38,13 @@ export const FREE_PENDING = "text-[#7d827e]";
 export const FREE_CARET =
   "inline-block h-[1.05em] w-0 -mx-px border-l-2 border-white align-[-0.15em]";
 
+// The per-session blurb on the start screen, practice, Free Type, and
+// punctuation alike. Sits below the Start button now rather than pinned to the
+// corner, and only the idle block renders it, so it's gone the moment you
+// press start. Same blue as the old corner intro, chrome rather than body text.
+export const SESSION_INTRO =
+  "mt-6 max-w-[440px] text-[1.6rem] leading-[1.45] text-[#78a2c2]";
+
 // Zero rather than a dash on an empty denominator: the stats tab always renders
 // its real shape, so you can see what the numbers will look like before you have
 // any. Nothing here divides by zero except a stats page you haven't earned yet.

@@ -13,6 +13,7 @@ import {
   FREE_CARET,
   FREE_MISS,
   FREE_PENDING,
+  SESSION_INTRO,
   START_BUTTON,
   WORD_SURFACE,
 } from "../ui";
@@ -332,6 +333,11 @@ export function Practice({
           <button className={START_BUTTON} onClick={start}>
             Start session
           </button>
+          <p className={SESSION_INTRO}>
+            These sentences include the words you need to practice. Type one
+            sentence at a time. Your results are saved when the session ends,
+            and the stats tab has them.
+          </p>
           {error && <p className="mt-4 text-[#ff7a70]">{error}</p>}
         </>
       )}
