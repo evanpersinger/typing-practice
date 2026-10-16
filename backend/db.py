@@ -11,6 +11,8 @@ request, so the practice loop never has to know there's more than one.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -69,10 +71,21 @@ def active_profile() -> Profile:
     return PROFILES[_active.get()]
 
 
-def _connect() -> sqlite3.Connection:
+@contextmanager
+def _connect() -> Iterator[sqlite3.Connection]:
+    """Commit on success, roll back on error, and always close.
+
+    sqlite3's own context manager only handles the transaction, so a bare
+    `with sqlite3.connect(...)` leaves the connection open until it's garbage
+    collected.
+    """
     conn = sqlite3.connect(active_profile().db)
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        with conn:
+            yield conn
+    finally:
+        conn.close()
 
 
 def init_db() -> None:
@@ -408,17 +421,20 @@ def record_result(
         )
 
 
-def write_session_transcript(drills: list[dict], new_words: list[dict]) -> Path:
+def write_session_transcript(
+    drills: list[dict], new_words: list[dict], session_id: int
+) -> Path:
     """Write one markdown file per session into sessions/ as a running history.
 
     `drills` is a list of
     {"sentence", "typed", "words": [{"word", "typed", "correct"}]}. Each session
-    gets its own timestamped file so the folder builds up a full history.
+    gets its own timestamped file (the session id keeps two submits in the same
+    second apart) so the folder builds up a full history.
     """
     now = datetime.now()
     sessions_dir = active_profile().sessions
-    sessions_dir.mkdir(exist_ok=True)
-    path = sessions_dir / f"{now:%Y-%m-%d_%H%M%S}.md"
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    path = sessions_dir / f"{now:%Y-%m-%d_%H%M%S}_s{session_id}.md"
 
     lines = [f"# Session {now:%Y-%m-%d %H:%M:%S}", ""]
     for i, drill in enumerate(drills, start=1):
