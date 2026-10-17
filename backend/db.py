@@ -463,7 +463,7 @@ def list_sessions() -> list[dict]:
             SELECT DISTINCT s.id, s.started_at
             FROM sessions s
             JOIN attempts a ON a.session_id = s.id
-            ORDER BY s.started_at DESC
+            ORDER BY s.id DESC
             """
         ).fetchall()
     return [dict(row) for row in rows]
