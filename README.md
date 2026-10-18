@@ -1,5 +1,7 @@
 # Typing Practice
 
+[![CI](https://github.com/evanpersinger/typing-practice/actions/workflows/ci.yml/badge.svg)](https://github.com/evanpersinger/typing-practice/actions/workflows/ci.yml)
+
 A typing trainer that only drills the words *you* get wrong.
 
 It keeps a list of words you misspell, asks an LLM to write practice sentences around them, and grades what you type. Words you keep missing stay in rotation. Words you get right ten times in a row graduate out. New words are added when you misspell them.
