@@ -5,13 +5,13 @@ Pure functions, so no database and no fixtures.
 
 import pytest
 
+from backend.agent import normalize
 from backend.main import (
     _classify_pair,
     _within_edits,
     find_misspellings,
     find_punctuation_misses,
     grade_drill,
-    normalize,
 )
 
 

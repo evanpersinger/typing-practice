@@ -165,16 +165,22 @@ class GeneratedDrills(BaseModel):
     drills: list[Drill]
 
 
-# The punctuation stripped from around a word before it's compared, the same rule
-# as normalize() in main.py. Keep the two in step: a target this accepts has to
-# be one the grader can find, or the drill grades nothing.
-_EDGE_PUNCTUATION = re.compile(r"^\W+|\W+$")
+_EDGE_MARKS = re.compile(r"^\W+|\W+$")
 
 NO_USABLE_SENTENCES = "The model returned no usable sentences. Try again."
 
 
-def _normalize(word: str) -> str:
-    return _EDGE_PUNCTUATION.sub("", word.lower())
+def normalize(raw: str) -> str:
+    """Lowercase, and drop anything that isn't a letter or digit from both ends,
+    so "Separate," and "'separate" both read as "separate". Marks inside stay:
+    "can't" and "well-known" are one word each. Punctuation is graded by its
+    own tab, so none of it can fail a spelling.
+
+    Defined once for both ends, the check that a target is in its sentence and
+    the grader that looks for it in what you typed: a target one accepts has to
+    be one the other can find, or the drill grades nothing.
+    """
+    return _EDGE_MARKS.sub("", raw.lower())
 
 
 def _usable_drills(drills: list[Drill], count: int) -> list[Drill]:
@@ -189,8 +195,8 @@ def _usable_drills(drills: list[Drill], count: int) -> list[Drill]:
     kept: list[Drill] = []
     seen: set[str] = set()
     for drill in drills:
-        in_sentence = {_normalize(token) for token in drill.sentence.split()}
-        targets = [_normalize(target) for target in drill.target_words]
+        in_sentence = {normalize(token) for token in drill.sentence.split()}
+        targets = [normalize(target) for target in drill.target_words]
         sentence = drill.sentence.strip().lower()
         if not targets:
             reason = "it has no target words"

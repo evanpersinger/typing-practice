@@ -196,8 +196,7 @@ export async function fetchPunctuationDrills(): Promise<{
   return res.json();
 }
 
-/** Only the sentence and what you typed. The backend grades this mode, unlike
- *  Practice, so there's one punctuation grader rather than two. */
+/** Only the sentence and what you typed. The backend grades it, same as Practice. */
 export async function submitPunctuationResults(
   results: PunctuationDrillResult[],
 ): Promise<void> {

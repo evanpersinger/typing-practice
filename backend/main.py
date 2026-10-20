@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from wordfreq import top_n_list
 
 from backend import agent, db, test_agent
+from backend.agent import normalize
 
 logger = logging.getLogger(__name__)
 
@@ -151,17 +152,6 @@ def _within_edits(typed: str, expected: str, cap: int) -> bool:
             return False
         previous = current
     return previous[-1] <= cap
-
-
-_EDGE_MARKS = re.compile(r"^\W+|\W+$")
-
-
-def normalize(raw: str) -> str:
-    """Lowercase, and drop anything that isn't a letter or digit from both ends,
-    so "Separate," and "'separate" both read as "separate". Marks inside stay:
-    "can't" and "well-known" are one word each. Punctuation is graded by its
-    own tab, so none of it can fail a spelling here."""
-    return _EDGE_MARKS.sub("", raw.lower())
 
 
 def _tokens(text: str) -> list[tuple[str, str]]:
@@ -311,8 +301,8 @@ def find_punctuation_misses(sentence: str, typed: str) -> list[tuple[str, str]]:
     """Where `typed` departs from `sentence` in punctuation, case, or spacing.
 
     Returned as (mark, kind) pairs: ("comma", "missing"), ("capital", "extra"),
-    ("space", "extra"). A character-level diff rather than the positional word
-    alignment the spelling grader uses, because the misses here are the very
+    ("space", "extra"). A character-level diff rather than the word alignment
+    the spelling grader uses, because the misses here are the very
     things that break a word split: a space before a period is a token of its
     own. Letter typos fall out of the diff untouched, they're Practice's job.
     """
