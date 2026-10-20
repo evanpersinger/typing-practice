@@ -22,7 +22,7 @@ def generate_or_502(make):
     refusal) into a 502 whose detail the frontend can show, not a bare 500."""
     try:
         return make()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"Could not generate sentences: {e}")
 
 
