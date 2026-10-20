@@ -170,6 +170,8 @@ class GeneratedDrills(BaseModel):
 # accepts has to be one the grader can find, or the drill grades nothing.
 _EDGE_PUNCTUATION = re.compile(r"^[^a-z0-9']+|[^a-z0-9']+$")
 
+NO_USABLE_SENTENCES = "The model returned no usable sentences. Try again."
+
 
 def _normalize(word: str) -> str:
     return _EDGE_PUNCTUATION.sub("", word.lower())
@@ -220,7 +222,7 @@ def generate_drills(words: list[str], count: int = 9) -> GeneratedDrills:
     generated = _parse(prompt, 1000, GeneratedDrills)
     drills = _usable_drills(generated.drills, count)
     if not drills:
-        raise RuntimeError("The model returned no usable sentences. Try again.")
+        raise RuntimeError(NO_USABLE_SENTENCES)
     return GeneratedDrills(drills=drills)
 
 
@@ -256,6 +258,59 @@ class PunctuationDrill(BaseModel):
 
 class GeneratedPunctuationDrills(BaseModel):
     drills: list[PunctuationDrill]
+
+
+# Closes on a mark, with room for the quotation mark after it: She said, "Go."
+_ENDS_WITH_MARK = re.compile(r'[.?!]"?$')
+
+# Rules from the prompt that a sentence can still break. Each one is only a
+# request to the model, and a sentence that breaks one is graded as a mistake
+# the user made.
+_RULE_BREAKS = [
+    (re.compile(r"\s[,;:.?!]"), "it has a space before a mark"),
+    (re.compile(r"\s\s"), "it has a double space"),
+    (re.compile(r"\s-|-\s"), "it has a dash that is not inside a word"),
+]
+
+
+def _punctuation_problem(sentence: str) -> str | None:
+    """Why a punctuation sentence breaks the prompt's rules, or None if it doesn't."""
+    if not sentence:
+        return "it is empty"
+    if not sentence.isascii():
+        return "it has a character a keyboard can't type"
+    if not _ENDS_WITH_MARK.search(sentence):
+        return "it doesn't end with a period, question mark, or exclamation mark"
+    for pattern, problem in _RULE_BREAKS:
+        if pattern.search(sentence):
+            return problem
+    return None
+
+
+def _usable_punctuation_drills(
+    drills: list[PunctuationDrill], count: int
+) -> list[PunctuationDrill]:
+    """Keep the sentences that follow the prompt's rules, and log why the rest went.
+
+    Stray whitespace around a sentence is trimmed rather than dropped: the
+    grader trims what you type, so a trailing space in the sentence itself would
+    count against you for nothing.
+    """
+    kept: list[PunctuationDrill] = []
+    seen: set[str] = set()
+    for drill in drills:
+        sentence = drill.sentence.strip()
+        problem = _punctuation_problem(sentence)
+        if problem is None and sentence in seen:
+            problem = "it repeats an earlier sentence"
+        if problem:
+            logger.warning(
+                "dropped a punctuation sentence, %s: %r", problem, drill.sentence
+            )
+            continue
+        seen.add(sentence)
+        kept.append(drill.model_copy(update={"sentence": sentence}))
+    return kept[:count]
 
 
 def generate_punctuation_drills(
@@ -294,4 +349,8 @@ def generate_punctuation_drills(
         "to read. Return each sentence with its feature written exactly as "
         "listed.\n\n" + listed
     )
-    return _parse(prompt, 1000, GeneratedPunctuationDrills)
+    generated = _parse(prompt, 1000, GeneratedPunctuationDrills)
+    drills = _usable_punctuation_drills(generated.drills, len(features))
+    if not drills:
+        raise RuntimeError(NO_USABLE_SENTENCES)
+    return GeneratedPunctuationDrills(drills=drills)
