@@ -116,9 +116,16 @@ export interface SessionDetail {
   typing: TypingStats;
 }
 
+/** The backend's `detail` (e.g. "ANTHROPIC_API_KEY is not set") beats a bare
+ *  status code. Falls back to the code when the body isn't JSON. */
+async function failure(res: Response, fallback: string): Promise<Error> {
+  const body = await res.json().catch(() => null);
+  return new Error(body?.detail ?? `${fallback} (${res.status})`);
+}
+
 export async function fetchDrills(): Promise<DrillsResponse> {
   const res = await fetch(`${API_BASE}/drills`, { headers: headers() });
-  if (!res.ok) throw new Error(`Failed to load drills (${res.status})`);
+  if (!res.ok) throw await failure(res, "Failed to load drills");
   return res.json();
 }
 
@@ -183,9 +190,7 @@ export async function fetchPunctuationDrills(): Promise<{
   const res = await fetch(`${API_BASE}/punctuation-drills`, {
     headers: headers(),
   });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch punctuation drills (${res.status})`);
-  }
+  if (!res.ok) throw await failure(res, "Failed to fetch punctuation drills");
   return res.json();
 }
 

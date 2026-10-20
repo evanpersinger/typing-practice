@@ -17,6 +17,15 @@ from wordfreq import top_n_list
 from backend import agent, db, test_agent
 
 
+def generate_or_502(make):
+    """Run a generator call; turn a provider failure (missing key, Ollama down,
+    refusal) into a 502 whose detail the frontend can show, not a bare 500."""
+    try:
+        return make()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not generate sentences: {e}")
+
+
 def agent_for(profile: str):
     """Testing gets canned sentences and a canned analysis: same shapes, no
     Claude, so a session starts instantly instead of after a 20-second wait."""
@@ -284,7 +293,7 @@ def get_drills(profile: Profile):
     words = db.get_drilling_words(limit=7) + db.get_mastered_sample(1)
     if not words:
         return {"words": [], "drills": []}
-    generated = agent.generate_drills(words)
+    generated = generate_or_502(lambda: agent.generate_drills(words))
     return {"words": words, "drills": [d.model_dump() for d in generated.drills]}
 
 
@@ -304,7 +313,9 @@ def get_punctuation_drills(profile: Profile):
         for stat in db.get_punctuation_stats()
         if stat["total"] >= 2 and stat["mark"] in drillable
     ][:3]
-    generated = agent_for(profile).generate_punctuation_drills(weak)
+    generated = generate_or_502(
+        lambda: agent_for(profile).generate_punctuation_drills(weak)
+    )
     return {"drills": [d.model_dump() for d in generated.drills]}
 
 
@@ -376,6 +387,8 @@ def submit_results(payload: ResultsPayload, profile: Profile):
     """Session end: all bookkeeping, no model call."""
     # One POST is one sitting, so the session boundary is already here in the
     # request. Nothing has to infer it from timestamps later.
+    if not payload.results:
+        return {"new_words": [], "typing": {"drills": 0, "avg_wpm": 0}}
     session_id = db.start_session()
 
     tracked = {row["word"] for row in db.get_all_words()}
@@ -411,7 +424,9 @@ def submit_results(payload: ResultsPayload, profile: Profile):
     # enough to fill most of the next session with the model's guesses. They go
     # on your list when you say so, from the recap.
     db.finish_session(session_id, earned)
-    db.write_session_transcript([d.model_dump() for d in payload.results], earned)
+    db.write_session_transcript(
+        [d.model_dump() for d in payload.results], earned, session_id
+    )
     return {
         "new_words": earned,
         "typing": db.get_typing_stats(session_id),
