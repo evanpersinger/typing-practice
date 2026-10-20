@@ -17,7 +17,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: uv sync
-      - run: uv run ruff check backend
+      - run: uv run ruff check backend tests
+      - run: uv run pytest
 
   frontend:
     runs-on: ubuntu-latest
@@ -36,4 +37,5 @@ jobs:
         with:
           node-version: 22
       - run: pnpm install --frozen-lockfile
+      - run: pnpm test
       - run: pnpm build
