@@ -40,8 +40,8 @@ def generate_or_502(make):
 
 
 def agent_for(profile: str):
-    """Testing gets canned sentences and a canned analysis: same shapes, no
-    Claude, so a session starts instantly instead of after a 20-second wait."""
+    """Testing gets canned sentences: same shapes, no Claude, so a session
+    starts instantly instead of after a 20-second wait."""
     return test_agent if profile == "testing" else agent
 
 

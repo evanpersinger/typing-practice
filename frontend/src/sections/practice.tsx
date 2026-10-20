@@ -189,7 +189,7 @@ export function usePractice(
     try {
       const data = await fetchDrills();
       if (data.drills.length === 0) {
-        setError("No words to practice yet. Add some to your seed word list.");
+        setError("No words to practice yet. Add some in the Words tab.");
         setPhase("idle");
         return;
       }

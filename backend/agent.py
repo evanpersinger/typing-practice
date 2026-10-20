@@ -20,25 +20,22 @@ from pydantic import BaseModel
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")  # picks up LLM_PROVIDER and both API keys
 
-"""
-Model each provider uses for both calls:
-
-Anthropic (latest generation):
-claude-opus-4-6            Opus 4.6  - most advance, most expensive
-claude-sonnet-5            Sonnet 5  - strong all-rounder, 
-claude-haiku-4-5-20251001  Haiku 4.5 - cheapest model
-
-OpenAI:
-gpt-5             full model, better prose, slower and pricier
-gpt-5-mini        middle option, closest match to Haiku
-gpt-5-nano        smallest and cheapest
-
-Local (Ollama, free, no API key, no internet):
-qwen3.5:4b        default, lighter sibling of qwen3.5:9b, pulled for this
-gemma4:12b        also pulled locally, pure text rather than vision
-qwen3.5:9b        also pulled locally, heavier, strained this machine
-"""
-
+# Model each provider uses for both calls, and the alternatives:
+#
+# Anthropic:
+# claude-opus-4-6            Opus 4.6  - most advanced, most expensive
+# claude-sonnet-5            Sonnet 5  - strong all-rounder
+# claude-haiku-4-5-20251001  Haiku 4.5 - cheapest model
+#
+# OpenAI:
+# gpt-5             full model, better prose, slower and pricier
+# gpt-5-mini        middle option, closest match to Haiku
+# gpt-5-nano        smallest and cheapest
+#
+# Local (Ollama, free, no API key, no internet):
+# qwen3.5:4b        default, lighter sibling of qwen3.5:9b, pulled for this
+# gemma4:12b        also pulled locally, pure text rather than vision
+# qwen3.5:9b        also pulled locally, heavier, strained this machine
 MODELS = {
     "anthropic": "claude-haiku-4-5-20251001", # haiku 4.5
     "openai": "gpt-5-nano", # gpt 5-nano
