@@ -1239,6 +1239,7 @@ dependencies = [
     { name = "anthropic" },
     { name = "fastapi" },
     { name = "openai" },
+    { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "requests" },
     { name = "uvicorn", extra = ["standard"] },
@@ -1253,9 +1254,10 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "anthropic" },
+    { name = "anthropic", specifier = ">=0.77.0" },
     { name = "fastapi" },
-    { name = "openai" },
+    { name = "openai", specifier = ">=1.66.0" },
+    { name = "pydantic", specifier = ">=2" },
     { name = "python-dotenv" },
     { name = "requests" },
     { name = "uvicorn", extras = ["standard"] },

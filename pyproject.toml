@@ -6,8 +6,9 @@ requires-python = ">=3.10"
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
-    "anthropic",
-    "openai",
+    "anthropic>=0.77.0",
+    "openai>=1.66.0",
+    "pydantic>=2",
     "python-dotenv",
     "wordfreq",
     "requests",

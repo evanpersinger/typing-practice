@@ -31,6 +31,8 @@ Open the URL from `make frontend`. Needs an API key in `.env` at the repo root (
 
 The backend port is set in the `Makefile`, the frontend port in `frontend/vite.config.ts`.
 
+This is a local dev setup. Both servers are dev servers, and the frontend reaches the backend through Vite's dev proxy. There is no production build or serve path.
+
 ## Profiles
 
 | | Personal | Testing |
