@@ -8,11 +8,11 @@ It keeps a list of words you misspell, asks an LLM to write practice sentences a
 
 ## How it works
 
-**Practice tab**: Your seven weakest words rotate into 10 sentences, one target word per sentence. Enter advances only when you reach the end by length. One session lasts 10-30 seconds.
+**Practice tab**: Your seven weakest words, plus one graduated word as a surprise re-test, rotate into 9 sentences, roughly one target word per sentence. Enter advances only when you reach the end by length. One session lasts 10-30 seconds.
 
 **Free Type**: A board of common English words (filtered to exclude ones you're already drilling). Space ends a word, not Enter. Miss the same word three times and it joins your weak list.
 
-**Punctuation tab**: Nine sentences per session, each teaches exactly one punctuation feature: comma in lists, semicolon between clauses, colon before explanations, hyphenated compounds, apostrophes, quotes, question marks, exclamation marks, or possessives. Lowercase is required for capitals. No spelling graded here. Each miss goes into your stats.
+**Punctuation tab**: Nine sentences per session, each teaches exactly one punctuation feature, picked from 11: comma in lists, comma after an introductory clause, semicolon between clauses, colon before explanations, hyphenated compounds, apostrophes in contractions, apostrophes for possession, quoted speech, question marks, exclamation marks, or a capitalized proper noun mid-sentence. The marks you miss most are picked first. Case counts, so a capital typed lowercase is a miss. No spelling graded here. Each miss goes into your stats.
 
 ## Running it
 
@@ -29,7 +29,7 @@ make frontend
 
 Open the URL from `make frontend`. Needs an API key in `.env` at the repo root (see `.env.example`), unless you're running the local provider (see Setup).
 
-Both ports are set in the `Makefile`.
+The backend port is set in the `Makefile`, the frontend port in `frontend/vite.config.ts`.
 
 ## Profiles
 
