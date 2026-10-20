@@ -5,6 +5,7 @@ FastAPI app wiring the local trainer together.
 from __future__ import annotations
 
 import difflib
+import logging
 import random
 import re
 from contextlib import asynccontextmanager
@@ -16,14 +17,26 @@ from wordfreq import top_n_list
 
 from backend import agent, db, test_agent
 
+logger = logging.getLogger(__name__)
+
 
 def generate_or_502(make):
     """Run a generator call; turn a provider failure (missing key, Ollama down,
-    refusal) into a 502 whose detail the frontend can show, not a bare 500."""
+    refusal) into a 502 the frontend can show, not a bare 500."""
     try:
         return make()
-    except Exception as e:  # noqa: BLE001
+    except RuntimeError as e:
+        # agent.py writes these messages for the user (missing key, Ollama down,
+        # refusal), so they're safe to show as they are.
         raise HTTPException(status_code=502, detail=f"Could not generate sentences: {e}")
+    except Exception:
+        # Anything else is an SDK or parsing error whose text can carry raw
+        # response bodies, so it stays in the log.
+        logger.exception("sentence generation failed")
+        raise HTTPException(
+            status_code=502,
+            detail="Could not generate sentences. Check the backend log.",
+        )
 
 
 def agent_for(profile: str):
