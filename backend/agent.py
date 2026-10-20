@@ -166,9 +166,9 @@ class GeneratedDrills(BaseModel):
 
 
 # The punctuation stripped from around a word before it's compared, the same rule
-# as normalize() in frontend/src/grade.ts. Keep the two in step: a target this
-# accepts has to be one the grader can find, or the drill grades nothing.
-_EDGE_PUNCTUATION = re.compile(r"^[^a-z0-9']+|[^a-z0-9']+$")
+# as normalize() in main.py. Keep the two in step: a target this accepts has to
+# be one the grader can find, or the drill grades nothing.
+_EDGE_PUNCTUATION = re.compile(r"^\W+|\W+$")
 
 NO_USABLE_SENTENCES = "The model returned no usable sentences. Try again."
 

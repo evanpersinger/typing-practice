@@ -354,7 +354,11 @@ class DrillResult(BaseModel):
     sentence: str = Field(max_length=MAX_TEXT_LENGTH)
     typed: str = Field(max_length=MAX_TEXT_LENGTH)
     duration_ms: int = 0
-    words: list[WordResult] = Field(max_length=MAX_TEXT_LENGTH)
+    # Which words the sentence was written to drill. The frontend only reports
+    # what you typed; grading happens here, once, in grade_drill.
+    target_words: list[Annotated[str, Field(max_length=MAX_TEXT_LENGTH)]] = Field(
+        max_length=MAX_TEXT_LENGTH
+    )
 
 
 class ResultsPayload(BaseModel):
@@ -491,13 +495,22 @@ def submit_results(payload: ResultsPayload, profile: Profile):
     tracked = {row["word"] for row in db.get_all_words()}
     earned: list[dict] = []
 
+    transcript: list[dict] = []
+
     for drill in payload.results:
         db.record_drill(drill.sentence, drill.typed, drill.duration_ms, session_id)
-        for word in drill.words:
+        graded = grade_drill(drill.sentence, drill.typed, drill.target_words)
+        transcript.append(
+            {
+                "sentence": drill.sentence,
+                "typed": drill.typed,
+                "words": [word.model_dump() for word in graded],
+            }
+        )
+        for word in graded:
             # record_result starts tracking a word it hasn't seen, so a string that
             # POST /words would refuse never gets in this way either
-            candidate = word.word.strip().lower()
-            if len(candidate) <= MAX_WORD_LENGTH and WORD_PATTERN.match(candidate):
+            if len(word.word) <= MAX_WORD_LENGTH and WORD_PATTERN.match(word.word):
                 db.record_result(word.word, word.typed, word.correct, session_id)
 
         # Every other word in the sentence. The graded ones above are already on
@@ -528,9 +541,7 @@ def submit_results(payload: ResultsPayload, profile: Profile):
     # Every row above is committed by now, so a transcript that can't be written
     # must not fail the request: the retry would record the whole session twice.
     try:
-        db.write_session_transcript(
-            [d.model_dump() for d in payload.results], earned, session_id
-        )
+        db.write_session_transcript(transcript, earned, session_id)
     except OSError:
         logger.exception("could not write the transcript for session %s", session_id)
     return {

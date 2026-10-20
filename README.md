@@ -60,6 +60,5 @@ Or run it free, locally: set `LLM_PROVIDER=local` and have [Ollama](https://olla
 
 ## Known rough edges
 
-- Grading in `grade.ts` is positional. Drop or insert a word mid-sentence and everything after it shifts. Only affects target words, so copy-typing works fine.
 - Punctuation sessions cannot detect a dropped trailing period; you must type something to submit a sentence, but that space doesn't count as the missing mark.
 - Free Type clock never pauses when switching tabs; cosmetic display only, never stored.

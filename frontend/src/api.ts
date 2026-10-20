@@ -47,11 +47,13 @@ export interface WordResult {
   correct: boolean;
 }
 
+/** One finished sentence. The backend does the grading, so this carries what
+ *  you typed and which words the sentence was written to drill. */
 export interface DrillResult {
   sentence: string;
   typed: string;
   duration_ms: number;
-  words: WordResult[];
+  target_words: string[];
 }
 
 export interface WordStat {

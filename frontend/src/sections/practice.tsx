@@ -8,7 +8,6 @@ import {
   type RefObject,
 } from "react";
 import { fetchDrills, submitResults, type Drill } from "../api";
-import { gradeDrill } from "../grade";
 import {
   FREE_CARET,
   FREE_MISS,
@@ -43,8 +42,8 @@ function PromptText({
   // you should see what you actually typed. Inline rather than out of flow like
   // the board's, since there's nothing after the sentence for it to shove along.
   const overflow = typed.slice(letters.length);
-  // Case-insensitive by default, the same as normalize() and the board: a capital
-  // you typed lowercase still grades correct, so it can't render red. `strict`
+  // Case-insensitive by default, the same as the backend's grader and the board: a
+  // capital you typed lowercase still grades correct, so it can't render red. `strict`
   // is the punctuation tab's, where that capital is exactly the miss.
   const matches = (char: string, i: number) =>
     strict ? typed[i] === char : typed[i].toLowerCase() === char.toLowerCase();
@@ -221,7 +220,7 @@ export function usePractice(
         sentence: drill.sentence,
         typed: typedText,
         duration_ms: allDurations[i] ?? 0,
-        words: gradeDrill(drill, typedText),
+        target_words: drill.target_words,
       };
     });
     setPhase("submitting");
