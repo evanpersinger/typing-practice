@@ -6,8 +6,10 @@ start. Set LLM_PROVIDER in .env to pick which provider runs it.
 
 from __future__ import annotations
 
+import logging
 import os
 import random
+import re
 from pathlib import Path
 from typing import TypeVar
 
@@ -19,6 +21,8 @@ from pydantic import BaseModel
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")  # picks up LLM_PROVIDER and both API keys
+
+logger = logging.getLogger(__name__)
 
 # Model each provider uses for both calls, and the alternatives:
 #
@@ -161,6 +165,47 @@ class GeneratedDrills(BaseModel):
     drills: list[Drill]
 
 
+# The punctuation stripped from around a word before it's compared, the same rule
+# as normalize() in frontend/src/grade.ts. Keep the two in step: a target this
+# accepts has to be one the grader can find, or the drill grades nothing.
+_EDGE_PUNCTUATION = re.compile(r"^[^a-z0-9']+|[^a-z0-9']+$")
+
+
+def _normalize(word: str) -> str:
+    return _EDGE_PUNCTUATION.sub("", word.lower())
+
+
+def _usable_drills(drills: list[Drill], count: int) -> list[Drill]:
+    """Keep the drills the app can actually use, and say why the rest went.
+
+    Nothing the model returns is trusted. A target word missing from its sentence
+    means the drill grades nothing, and it usually means the model wrote the word
+    wrong or in another form, which is worse: the sentence would teach it.
+    Whether a drill was good enough to keep isn't something to retry for, so
+    this only filters.
+    """
+    kept: list[Drill] = []
+    seen: set[str] = set()
+    for drill in drills:
+        in_sentence = {_normalize(token) for token in drill.sentence.split()}
+        targets = [_normalize(target) for target in drill.target_words]
+        sentence = drill.sentence.strip().lower()
+        if not targets:
+            reason = "it has no target words"
+        elif "" in targets:
+            reason = "it has an empty target word"
+        elif not all(target in in_sentence for target in targets):
+            reason = "a target word is not in the sentence"
+        elif sentence in seen:
+            reason = "it repeats an earlier sentence"
+        else:
+            seen.add(sentence)
+            kept.append(drill)
+            continue
+        logger.warning("dropped a practice sentence, %s: %r", reason, drill.sentence)
+    return kept[:count]
+
+
 def generate_drills(words: list[str], count: int = 9) -> GeneratedDrills:
     joined = ", ".join(words)
     prompt = (
@@ -172,7 +217,11 @@ def generate_drills(words: list[str], count: int = 9) -> GeneratedDrills:
         "Keep them everyday and easy to read. "
         "For each item, list which of the target words it contains."
     )
-    return _parse(prompt, 1000, GeneratedDrills)
+    generated = _parse(prompt, 1000, GeneratedDrills)
+    drills = _usable_drills(generated.drills, count)
+    if not drills:
+        raise RuntimeError("The model returned no usable sentences. Try again.")
+    return GeneratedDrills(drills=drills)
 
 
 # punctuation practice
