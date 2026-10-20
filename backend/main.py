@@ -447,9 +447,14 @@ def submit_results(payload: ResultsPayload, profile: Profile):
     # enough to fill most of the next session with the model's guesses. They go
     # on your list when you say so, from the recap.
     db.finish_session(session_id, earned)
-    db.write_session_transcript(
-        [d.model_dump() for d in payload.results], earned, session_id
-    )
+    # Every row above is committed by now, so a transcript that can't be written
+    # must not fail the request: the retry would record the whole session twice.
+    try:
+        db.write_session_transcript(
+            [d.model_dump() for d in payload.results], earned, session_id
+        )
+    except OSError:
+        logger.exception("could not write the transcript for session %s", session_id)
     return {
         "new_words": earned,
         "typing": db.get_typing_stats(session_id),
