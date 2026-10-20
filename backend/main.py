@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from wordfreq import top_n_list
 
 from backend import agent, db, test_agent
@@ -247,21 +247,27 @@ def find_punctuation_misses(sentence: str, typed: str) -> list[tuple[str, str]]:
     return found
 
 
+# Generous bounds, there only so one request can't carry an absurd amount of text
+# or drills into the grader. A real sentence is a few hundred characters.
+MAX_TEXT_LENGTH = 2000
+MAX_DRILLS_PER_SUBMIT = 100
+
+
 class WordResult(BaseModel):
-    word: str
-    typed: str
+    word: str = Field(max_length=MAX_TEXT_LENGTH)
+    typed: str = Field(max_length=MAX_TEXT_LENGTH)
     correct: bool
 
 
 class DrillResult(BaseModel):
-    sentence: str
-    typed: str
+    sentence: str = Field(max_length=MAX_TEXT_LENGTH)
+    typed: str = Field(max_length=MAX_TEXT_LENGTH)
     duration_ms: int = 0
-    words: list[WordResult]
+    words: list[WordResult] = Field(max_length=MAX_TEXT_LENGTH)
 
 
 class ResultsPayload(BaseModel):
-    results: list[DrillResult]
+    results: list[DrillResult] = Field(max_length=MAX_DRILLS_PER_SUBMIT)
 
 
 class WordPayload(BaseModel):
@@ -269,12 +275,12 @@ class WordPayload(BaseModel):
 
 
 class PunctuationDrillResult(BaseModel):
-    sentence: str
-    typed: str
+    sentence: str = Field(max_length=MAX_TEXT_LENGTH)
+    typed: str = Field(max_length=MAX_TEXT_LENGTH)
 
 
 class PunctuationResultsPayload(BaseModel):
-    results: list[PunctuationDrillResult]
+    results: list[PunctuationDrillResult] = Field(max_length=MAX_DRILLS_PER_SUBMIT)
 
 
 @app.get("/drills")
@@ -397,7 +403,11 @@ def submit_results(payload: ResultsPayload, profile: Profile):
     for drill in payload.results:
         db.record_drill(drill.sentence, drill.typed, drill.duration_ms, session_id)
         for word in drill.words:
-            db.record_result(word.word, word.typed, word.correct, session_id)
+            # record_result starts tracking a word it hasn't seen, so a string that
+            # POST /words would refuse never gets in this way either
+            candidate = word.word.strip().lower()
+            if len(candidate) <= MAX_WORD_LENGTH and WORD_PATTERN.match(candidate):
+                db.record_result(word.word, word.typed, word.correct, session_id)
 
         # Every other word in the sentence. The graded ones above are already on
         # your list; these are the ones nothing was watching, and three misses
