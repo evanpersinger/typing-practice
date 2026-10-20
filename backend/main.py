@@ -153,30 +153,108 @@ def _within_edits(typed: str, expected: str, cap: int) -> bool:
     return previous[-1] <= cap
 
 
+_EDGE_MARKS = re.compile(r"^\W+|\W+$")
+
+
+def normalize(raw: str) -> str:
+    """Lowercase, and drop anything that isn't a letter or digit from both ends,
+    so "Separate," and "'separate" both read as "separate". Marks inside stay:
+    "can't" and "well-known" are one word each. Punctuation is graded by its
+    own tab, so none of it can fail a spelling here."""
+    return _EDGE_MARKS.sub("", raw.lower())
+
+
+def _tokens(text: str) -> list[tuple[str, str]]:
+    """(as typed, normalized) for each token that has a word in it. A lone dash
+    or a stray period normalizes to nothing and is left out, so it can't be
+    paired with a word."""
+    pairs = [(raw, normalize(raw)) for raw in text.split()]
+    return [(raw, word) for raw, word in pairs if word]
+
+
+def align_words(expected: list[str], typed: list[str]) -> list[int | None]:
+    """For each expected word, the index of the typed word that stands for it,
+    or None if it was skipped.
+
+    Two words pair up only if they're equal or close enough to be a misspelling
+    of each other (MAX_MISSPELL_EDITS). A word typed twice, or left out, is a gap
+    rather than a shift, so everything after it still lines up. A gap costs 1 and
+    so does a near miss, which means pairing two close words always beats
+    skipping both (2), and an exact match (0) beats either.
+    """
+    def pair_cost(expected_word: str, typed_word: str) -> int | None:
+        if expected_word == typed_word:
+            return 0
+        if _within_edits(typed_word, expected_word, MAX_MISSPELL_EDITS):
+            return 1
+        return None
+
+    rows, cols = len(expected), len(typed)
+    cost = [[0] * (cols + 1) for _ in range(rows + 1)]
+    for i in range(1, rows + 1):
+        cost[i][0] = i
+    for j in range(1, cols + 1):
+        cost[0][j] = j
+    for i in range(1, rows + 1):
+        for j in range(1, cols + 1):
+            best = min(cost[i - 1][j], cost[i][j - 1]) + 1
+            paired = pair_cost(expected[i - 1], typed[j - 1])
+            if paired is not None:
+                best = min(best, cost[i - 1][j - 1] + paired)
+            cost[i][j] = best
+
+    matched: list[int | None] = [None] * rows
+    i, j = rows, cols
+    while i > 0 and j > 0:
+        paired = pair_cost(expected[i - 1], typed[j - 1])
+        if paired is not None and cost[i][j] == cost[i - 1][j - 1] + paired:
+            matched[i - 1] = j - 1
+            i -= 1
+            j -= 1
+        elif cost[i][j] == cost[i - 1][j] + 1:
+            i -= 1
+        else:
+            j -= 1
+    return matched
+
+
+def grade_drill(sentence: str, typed: str, target_words: list[str]) -> list[WordResult]:
+    """How each target word in `sentence` went, in sentence order.
+
+    `typed` on a result is the word as you typed it, punctuation and all. A
+    target you skipped comes back with nothing typed and counts as a miss.
+    """
+    expected = _tokens(sentence)
+    typed_tokens = _tokens(typed)
+    matched = align_words(
+        [word for _, word in expected], [word for _, word in typed_tokens]
+    )
+    targets = {normalize(word) for word in target_words}
+
+    results: list[WordResult] = []
+    for (_, word), index in zip(expected, matched):
+        if word not in targets:
+            continue
+        raw, attempt = typed_tokens[index] if index is not None else ("", "")
+        results.append(WordResult(word=word, typed=raw, correct=attempt == word))
+    return results
+
+
 def find_misspellings(sentence: str, typed: str) -> list[tuple[str, str]]:
     """Words in `sentence` you spelled wrong, as (word, what_you_typed) pairs.
 
-    Positional alignment, same as the frontend's grader and with the same
-    limitation: inserting or dropping a word shifts everything after it. A
-    shifted pair reads as two unrelated words, which is exactly what the edit
-    distance throws out, so the failure mode is missing a real misspelling
-    rather than inventing one.
+    Only words that pair up with something close to them can be misspelled: a
+    word you skipped, or replaced with a different word, is not a typo.
     """
-    def bare(raw: str) -> str:
-        return raw.strip(".,!?;:'\"").lower()
-
-    expected_words = [bare(raw) for raw in sentence.split()]
-    typed_words = [bare(raw) for raw in typed.split()]
+    expected = [word for _, word in _tokens(sentence)]
+    typed_words = [word for _, word in _tokens(typed)]
 
     found: list[tuple[str, str]] = []
-    for i, word in enumerate(expected_words):
-        if not WORD_PATTERN.match(word):
+    for word, index in zip(expected, align_words(expected, typed_words)):
+        if index is None or not WORD_PATTERN.match(word):
             continue
-        attempt = typed_words[i] if i < len(typed_words) else ""
-        if not attempt or attempt == word:
-            continue
-        if _within_edits(attempt, word, MAX_MISSPELL_EDITS):
-            found.append((word, attempt))
+        if typed_words[index] != word:
+            found.append((word, typed_words[index]))
     return found
 
 

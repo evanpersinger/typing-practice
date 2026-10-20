@@ -10,6 +10,8 @@ from backend.main import (
     _within_edits,
     find_misspellings,
     find_punctuation_misses,
+    grade_drill,
+    normalize,
 )
 
 
@@ -51,6 +53,98 @@ def test_words_that_were_never_typed_are_skipped() -> None:
 
 def test_tokens_that_are_not_words_are_ignored() -> None:
     assert find_misspellings("Call 555 now.", "Call 556 now.") == []
+
+
+def test_a_word_typed_twice_does_not_hide_a_misspelling() -> None:
+    assert find_misspellings(
+        "We will receive the package soon.", "We will will recieve the package soon."
+    ) == [("receive", "recieve")]
+
+
+def test_a_dropped_word_does_not_hide_a_misspelling() -> None:
+    assert find_misspellings(
+        "We will receive the package soon.", "We recieve the package soon."
+    ) == [("receive", "recieve")]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("Separate,", "separate"),
+        ("'separate", "separate"),  # a stray apostrophe is not a spelling mistake
+        ('"Wait', "wait"),
+        ("(maybe)", "maybe"),
+        ("can't.", "can't"),
+        ("well-known,", "well-known"),
+        ("café.", "café"),  # an accent is part of the word
+    ],
+)
+def test_normalize(raw: str, expected: str) -> None:
+    assert normalize(raw) == expected
+
+
+SENTENCE = "Keep the two files separate."
+
+
+def grade(typed: str) -> list[dict]:
+    return [r.model_dump() for r in grade_drill(SENTENCE, typed, ["separate"])]
+
+
+def test_a_correct_target_is_right_and_keeps_what_was_typed() -> None:
+    assert grade("Keep the two files separate.") == [
+        {"word": "separate", "typed": "separate.", "correct": True}
+    ]
+
+
+def test_a_misspelled_target_is_wrong_and_records_the_attempt() -> None:
+    assert grade("Keep the two files seperate.") == [
+        {"word": "separate", "typed": "seperate.", "correct": False}
+    ]
+
+
+def test_case_and_punctuation_on_the_typed_word_are_ignored() -> None:
+    assert grade("keep the two files SEPARATE") == [
+        {"word": "separate", "typed": "SEPARATE", "correct": True}
+    ]
+
+
+def test_only_the_targets_are_graded_in_sentence_order() -> None:
+    results = grade_drill(
+        "A vector is not a variable.",
+        "A vector is not a variable.",
+        ["variable", "vector"],
+    )
+
+    assert [r.word for r in results] == ["vector", "variable"]
+
+
+def test_an_unfinished_sentence_marks_the_target_wrong_with_nothing_typed() -> None:
+    assert grade("Keep the two") == [{"word": "separate", "typed": "", "correct": False}]
+
+
+def test_a_word_typed_twice_does_not_fail_a_correct_target() -> None:
+    assert grade("Keep the the two files separate.") == [
+        {"word": "separate", "typed": "separate.", "correct": True}
+    ]
+
+
+def test_a_word_typed_twice_still_catches_a_misspelled_target() -> None:
+    assert grade("Keep the the two files seperate.") == [
+        {"word": "separate", "typed": "seperate.", "correct": False}
+    ]
+
+
+def test_a_dropped_word_does_not_shift_the_target() -> None:
+    assert grade("Keep two files separate.") == [
+        {"word": "separate", "typed": "separate.", "correct": True}
+    ]
+
+
+def test_a_different_word_in_place_of_the_target_reads_as_skipped() -> None:
+    # Too far from "separate" to be a typo of it, so nothing is paired with it.
+    assert grade("Keep the two files apart.") == [
+        {"word": "separate", "typed": "", "correct": False}
+    ]
 
 
 @pytest.mark.parametrize(
