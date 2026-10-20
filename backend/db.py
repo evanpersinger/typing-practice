@@ -145,8 +145,14 @@ def init_db() -> None:
         _add_column(conn, "drills", "session_id INTEGER REFERENCES sessions(id)")
 
 
+# The tables _add_column may alter. The name goes into SQL as text, so nothing else gets through.
+MIGRATABLE_TABLES = {"attempts", "drills"}
+
+
 def _add_column(conn: sqlite3.Connection, table: str, declaration: str) -> None:
     """Add a column to an existing table, no-op if it's already there."""
+    if table not in MIGRATABLE_TABLES:
+        raise ValueError(f"unknown table: {table}")
     name = declaration.split()[0]
     existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
     if name not in existing:
