@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend import db
-from backend.main import app
+from backend.main import MAX_WEAK_WORDS, MISSPELL_STRIKES, app
 
 pytestmark = pytest.mark.usefixtures("temp_db")
 
@@ -53,3 +53,30 @@ def test_a_word_typed_twice_is_not_recorded_as_a_miss() -> None:
 
     row = next(w for w in db.get_all_words() if w["word"] == "separate")
     assert (row["attempts"], row["misses"]) == (1, 0)
+
+
+def test_a_full_list_does_not_grow_from_a_session() -> None:
+    for i in range(MAX_WEAK_WORDS):
+        db.add_word(f"filler{i}")
+    misspelled_untracked = {
+        "sentence": "Keep the two files.",
+        "typed": "Keep the two fiels.",
+        "duration_ms": 3000,
+        "target_words": [],
+    }
+
+    with TestClient(app) as client:
+        # "separate" is a graded target that isn't on the list yet
+        client.post("/results", json=PAYLOAD, headers={"X-Profile": "testing"})
+        # "files" reaches its third strike, which would normally add it
+        responses = [
+            client.post(
+                "/results",
+                json={"results": [misspelled_untracked]},
+                headers={"X-Profile": "testing"},
+            )
+            for _ in range(MISSPELL_STRIKES)
+        ]
+
+    assert db.count_drilling_words() == MAX_WEAK_WORDS
+    assert responses[-1].json()["new_words"] == []

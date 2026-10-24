@@ -92,9 +92,15 @@ WORD_PATTERN = re.compile(r"^[a-z][a-z'-]*$")
 MAX_WORD_LENGTH = 40
 
 # Matches the frontend's board (six by ten), so the cap and the thing that
-# displays it can't disagree. Seeding bypasses this endpoint, so a seed list
-# longer than 60 still loads.
+# displays it can't disagree. Seeding bypasses the cap, so a seed list longer
+# than 60 still loads.
 MAX_WEAK_WORDS = 60
+
+
+def list_is_full() -> bool:
+    """Whether the weak list is at its cap. Every way a word gets onto it asks
+    this live, because one session can fill the last slot partway through."""
+    return db.count_drilling_words() >= MAX_WEAK_WORDS
 
 
 # Free Type draws from the most common English words by measured usage, not from
@@ -448,7 +454,7 @@ def add_practice_word(payload: WordPayload, profile: Profile):
         )
     # Free Type adds through here too, so a word earning its third miss hits the
     # same ceiling rather than sneaking past it.
-    if db.count_drilling_words() >= MAX_WEAK_WORDS:
+    if list_is_full():
         raise HTTPException(
             status_code=400,
             detail=(
@@ -499,9 +505,14 @@ def submit_results(payload: ResultsPayload, profile: Profile):
         )
         for word in graded:
             # record_result starts tracking a word it hasn't seen, so a string that
-            # POST /words would refuse never gets in this way either
-            if len(word.word) <= MAX_WORD_LENGTH and WORD_PATTERN.match(word.word):
-                db.record_result(word.word, word.typed, word.correct, session_id)
+            # POST /words would refuse never gets in this way either, and neither
+            # does a word that would go past the cap
+            if len(word.word) > MAX_WORD_LENGTH or not WORD_PATTERN.match(word.word):
+                continue
+            if word.word not in tracked and list_is_full():
+                continue
+            db.record_result(word.word, word.typed, word.correct, session_id)
+            tracked.add(word.word)
 
         # Every other word in the sentence. The graded ones above are already on
         # your list; these are the ones nothing was watching, and three misses
@@ -510,6 +521,9 @@ def submit_results(payload: ResultsPayload, profile: Profile):
             if word in tracked:
                 continue
             if db.record_misspelling(word, attempt) < MISSPELL_STRIKES:
+                continue
+            # The count stays, so the word joins once mastering one frees a slot
+            if list_is_full():
                 continue
             db.add_word(word, source="performance")
             db.clear_misspelling(word)
