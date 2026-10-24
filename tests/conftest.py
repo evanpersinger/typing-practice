@@ -1,6 +1,12 @@
 import pytest
 
-from backend import db
+from backend import agent, db
+
+
+@pytest.fixture(autouse=True)
+def isolated_llm_log(tmp_path, monkeypatch):
+    """Keep tests that call the generators out of the real llm_calls.jsonl."""
+    monkeypatch.setattr(agent, "LLM_LOG", tmp_path / "llm_calls.jsonl")
 
 
 @pytest.fixture
