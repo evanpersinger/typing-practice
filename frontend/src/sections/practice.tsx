@@ -1,5 +1,4 @@
 import {
-  Fragment,
   useEffect,
   useRef,
   useState,
@@ -31,6 +30,14 @@ const PROMPT_BOARD = `${WORD_SURFACE} px-14 py-12`;
 // that stepping away mid-sentence doesn't drag your wpm down.
 const MAX_PAUSE_MS = 5000;
 
+// The caret in front of the next letter, drawn as a background on that letter
+// instead of a box of its own. A box between two letters is a place the line can
+// break, so a word at the right edge split in two at the caret and the break
+// moved with every keystroke. A background takes no room, so typing can't change
+// where the lines wrap.
+const PROMPT_CARET =
+  "bg-[linear-gradient(white,white)] bg-no-repeat bg-[length:2px_1.05em] bg-left";
+
 // The sentence you're copying, drawn character by character against what you've
 // typed so far. Same three states and the same caret as the Free Type board, so a
 // grey letter means the same thing in both modes: one you haven't reached yet.
@@ -59,10 +66,12 @@ function PromptText({
   return (
     <>
       {letters.map((char, i) => (
-        <Fragment key={i}>
-          {i === typed.length && <span className={FREE_CARET} />}
-          <span className={letterClass(char, i)}>{char}</span>
-        </Fragment>
+        <span
+          key={i}
+          className={`${letterClass(char, i)} ${i === typed.length ? PROMPT_CARET : ""}`}
+        >
+          {char}
+        </span>
       ))}
       {/* After the overflow, not before it: the caret sits at the end of what
           you've typed, and past the last letter that's past the overflow too. */}
