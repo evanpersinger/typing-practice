@@ -101,6 +101,9 @@ def _parse_local(prompt: str, output_format: type[T]) -> T:
                 "messages": [{"role": "user", "content": prompt}],
                 "format": output_format.model_json_schema(),
                 "stream": False,
+                # Thinking only adds wait time to a fixed-shape task, and the
+                # schema above already constrains the answer.
+                "think": False,
                 # Deterministic, same reasoning as every other provider here:
                 # this is a structured drill, not a conversation.
                 "options": {"temperature": 0},
