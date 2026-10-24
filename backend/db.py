@@ -15,7 +15,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -427,7 +427,6 @@ def record_result(
 ) -> None:
     """Log a raw attempt and roll the word's stats forward."""
     word = word.strip().lower()
-    today = date.today().isoformat()
     with _use(conn) as connection:
         connection.execute(
             """
@@ -460,10 +459,11 @@ def record_result(
         connection.execute(
             """
             UPDATE words
-            SET attempts = ?, misses = ?, streak = ?, status = ?, last_seen = ?
+            SET attempts = ?, misses = ?, streak = ?, status = ?,
+                last_seen = datetime('now')
             WHERE word = ?
             """,
-            (attempts, misses, streak, status, today, word),
+            (attempts, misses, streak, status, word),
         )
 
 

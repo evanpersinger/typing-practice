@@ -25,6 +25,11 @@ export type Phase = "idle" | "loading" | "typing" | "submitting";
 // a tight margin around type that big.
 const PROMPT_BOARD = `${WORD_SURFACE} px-14 py-12`;
 
+// The most a single gap between keystrokes adds to a sentence's time. Long
+// enough that stopping to think about a hard word still counts, short enough
+// that stepping away mid-sentence doesn't drag your wpm down.
+const MAX_PAUSE_MS = 5000;
+
 // The sentence you're copying, drawn character by character against what you've
 // typed so far. Same three states and the same caret as the Free Type board, so a
 // grey letter means the same thing in both modes: one you haven't reached yet.
@@ -145,20 +150,24 @@ export function usePractice(
   // Clock for the sentence on screen. Nothing displays it any more, but it's
   // still what wpm is computed from, so it has to stay honest: it counts only
   // time you spent actually typing, starting on your first keystroke rather
-  // than on display, and stopping when you leave the tab. `banked` holds the
-  // time from earlier runs on this same sentence, so pausing resumes instead of
-  // restarting.
-  const startedAt = useRef<number | null>(null);
+  // than on display, and stopping when you leave the tab. A gap between
+  // keystrokes adds at most MAX_PAUSE_MS. `banked` holds the time so far on this
+  // sentence, so leaving the tab and coming back resumes instead of restarting.
+  const lastKeyAt = useRef<number | null>(null);
   const banked = useRef(0);
 
+  function bankSinceLastKey(now: number) {
+    if (lastKeyAt.current === null) return;
+    banked.current += Math.min(now - lastKeyAt.current, MAX_PAUSE_MS);
+  }
+
   function stopClock() {
-    if (startedAt.current === null) return;
-    banked.current += Date.now() - startedAt.current;
-    startedAt.current = null;
+    bankSinceLastKey(Date.now());
+    lastKeyAt.current = null;
   }
 
   function resetClock() {
-    startedAt.current = null;
+    lastKeyAt.current = null;
     banked.current = 0;
   }
 
@@ -283,7 +292,9 @@ export function usePractice(
   }
 
   function handleChange(e: ChangeEvent<HTMLInputElement>) {
-    if (startedAt.current === null) startedAt.current = Date.now();
+    const now = Date.now();
+    bankSinceLastKey(now);
+    lastKeyAt.current = now;
     setCurrent(e.target.value);
   }
 
