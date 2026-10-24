@@ -8,6 +8,7 @@ import difflib
 import logging
 import random
 import re
+import sqlite3
 from contextlib import asynccontextmanager
 from typing import Annotated
 
@@ -97,10 +98,11 @@ MAX_WORD_LENGTH = 40
 MAX_WEAK_WORDS = 60
 
 
-def list_is_full() -> bool:
+def list_is_full(conn: sqlite3.Connection | None = None) -> bool:
     """Whether the weak list is at its cap. Every way a word gets onto it asks
-    this live, because one session can fill the last slot partway through."""
-    return db.count_drilling_words() >= MAX_WEAK_WORDS
+    this live, because one session can fill the last slot partway through.
+    Mid-transaction, pass its connection or the count misses what it just added."""
+    return db.count_drilling_words(conn) >= MAX_WEAK_WORDS
 
 
 # Free Type draws from the most common English words by measured usage, not from
@@ -486,62 +488,72 @@ def submit_results(payload: ResultsPayload, profile: Profile):
     # request. Nothing has to infer it from timestamps later.
     if not payload.results:
         return {"new_words": [], "typing": {"drills": 0, "avg_wpm": 0}}
-    session_id = db.start_session()
-
     tracked = {row["word"] for row in db.get_all_words()}
     earned: list[dict] = []
 
     transcript: list[dict] = []
 
-    for drill in payload.results:
-        db.record_drill(drill.sentence, drill.typed, drill.duration_ms, session_id)
-        graded = grade_drill(drill.sentence, drill.typed, drill.target_words)
-        transcript.append(
-            {
-                "sentence": drill.sentence,
-                "typed": drill.typed,
-                "words": [word.model_dump() for word in graded],
-            }
-        )
-        for word in graded:
-            # record_result starts tracking a word it hasn't seen, so a string that
-            # POST /words would refuse never gets in this way either, and neither
-            # does a word that would go past the cap
-            if len(word.word) > MAX_WORD_LENGTH or not WORD_PATTERN.match(word.word):
-                continue
-            if word.word not in tracked and list_is_full():
-                continue
-            db.record_result(word.word, word.typed, word.correct, session_id)
-            tracked.add(word.word)
+    # Every row of the sitting goes in one transaction. A failure partway through
+    # rolls all of it back, so the retry that follows a failed submit starts from
+    # nothing instead of doubling whatever got in before the failure.
+    with db.transaction() as conn:
+        session_id = db.start_session(conn)
 
-        # Every other word in the sentence. The graded ones above are already on
-        # your list; these are the ones nothing was watching, and three misses
-        # is what puts one on it.
-        for word, attempt in find_misspellings(drill.sentence, drill.typed):
-            if word in tracked:
-                continue
-            if db.record_misspelling(word, attempt) < MISSPELL_STRIKES:
-                continue
-            # The count stays, so the word joins once mastering one frees a slot
-            if list_is_full():
-                continue
-            db.add_word(word, source="performance")
-            db.clear_misspelling(word)
-            tracked.add(word)
-            earned.append(
+        for drill in payload.results:
+            db.record_drill(
+                drill.sentence, drill.typed, drill.duration_ms, session_id, conn=conn
+            )
+            graded = grade_drill(drill.sentence, drill.typed, drill.target_words)
+            transcript.append(
                 {
-                    "word": word,
-                    "reason": f"you've spelled it wrong {MISSPELL_STRIKES} times, "
-                    f"most recently as '{attempt}'",
+                    "sentence": drill.sentence,
+                    "typed": drill.typed,
+                    "words": [word.model_dump() for word in graded],
                 }
             )
+            for word in graded:
+                # record_result starts tracking a word it hasn't seen, so a string
+                # that POST /words would refuse never gets in this way either, and
+                # neither does a word that would go past the cap
+                if len(word.word) > MAX_WORD_LENGTH or not WORD_PATTERN.match(
+                    word.word
+                ):
+                    continue
+                if word.word not in tracked and list_is_full(conn):
+                    continue
+                db.record_result(
+                    word.word, word.typed, word.correct, session_id, conn=conn
+                )
+                tracked.add(word.word)
 
-    # Suggestions are recorded, not added. get_drilling_words ranks unattempted
-    # words above everything else, so a word added here would outrank the words
-    # you actually keep missing until you'd practiced it once. Five a session was
-    # enough to fill most of the next session with the model's guesses. They go
-    # on your list when you say so, from the recap.
-    db.finish_session(session_id, earned)
+            # Every other word in the sentence. The graded ones above are already
+            # on your list; these are the ones nothing was watching, and three
+            # misses is what puts one on it.
+            for word, attempt in find_misspellings(drill.sentence, drill.typed):
+                if word in tracked:
+                    continue
+                if db.record_misspelling(word, attempt, conn=conn) < MISSPELL_STRIKES:
+                    continue
+                # The count stays, so the word joins once mastering one frees a slot
+                if list_is_full(conn):
+                    continue
+                db.add_word(word, source="performance", conn=conn)
+                db.clear_misspelling(word, conn=conn)
+                tracked.add(word)
+                earned.append(
+                    {
+                        "word": word,
+                        "reason": f"you've spelled it wrong {MISSPELL_STRIKES} times, "
+                        f"most recently as '{attempt}'",
+                    }
+                )
+
+        # Suggestions are recorded, not added. get_drilling_words ranks unattempted
+        # words above everything else, so a word added here would outrank the words
+        # you actually keep missing until you'd practiced it once. Five a session
+        # was enough to fill most of the next session with the model's guesses.
+        # They go on your list when you say so, from the recap.
+        db.finish_session(session_id, earned, conn=conn)
     # Every row above is committed by now, so a transcript that can't be written
     # must not fail the request: the retry would record the whole session twice.
     try:

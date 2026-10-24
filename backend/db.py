@@ -88,6 +88,29 @@ def _connect() -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+@contextmanager
+def transaction() -> Iterator[sqlite3.Connection]:
+    """One connection for a run of writes that must all land or none of them.
+
+    Pass it as `conn` to the functions below. Without it each of them opens its
+    own connection and commits on its own, which is what leaves half a session
+    behind when something fails partway through.
+    """
+    with _connect() as conn:
+        yield conn
+
+
+@contextmanager
+def _use(conn: sqlite3.Connection | None) -> Iterator[sqlite3.Connection]:
+    """The caller's connection if it passed one, otherwise a fresh one that
+    commits when the block ends."""
+    if conn is not None:
+        yield conn
+    else:
+        with _connect() as own:
+            yield own
+
+
 def init_db() -> None:
     with _connect() as conn:
         conn.executescript(
@@ -172,14 +195,16 @@ def _add_column(conn: sqlite3.Connection, table: str, declaration: str) -> None:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {declaration}")
 
 
-def start_session() -> int:
+def start_session(conn: sqlite3.Connection | None = None) -> int:
     """Open a session and return its id, to stamp on this sitting's rows."""
-    with _connect() as conn:
-        cursor = conn.execute("INSERT INTO sessions DEFAULT VALUES")
+    with _use(conn) as connection:
+        cursor = connection.execute("INSERT INTO sessions DEFAULT VALUES")
         return int(cursor.lastrowid)
 
 
-def add_word(word: str, source: str = "seed") -> bool:
+def add_word(
+    word: str, source: str = "seed", conn: sqlite3.Connection | None = None
+) -> bool:
     """Add a word if it isn't already tracked. Returns whether it was new.
 
     Duplicates are impossible rather than merely avoided: `words.word` is UNIQUE
@@ -191,15 +216,17 @@ def add_word(word: str, source: str = "seed") -> bool:
     word = word.strip().lower()
     if not word:
         return False
-    with _connect() as conn:
-        cursor = conn.execute(
+    with _use(conn) as connection:
+        cursor = connection.execute(
             "INSERT OR IGNORE INTO words (word, source) VALUES (?, ?)",
             (word, source),
         )
         return cursor.rowcount > 0
 
 
-def record_misspelling(word: str, typed: str) -> int:
+def record_misspelling(
+    word: str, typed: str, conn: sqlite3.Connection | None = None
+) -> int:
     """Count one misspelling of an untracked word. Returns the running total.
 
     Separate from `attempts`, which is the record of words already on your list.
@@ -208,8 +235,8 @@ def record_misspelling(word: str, typed: str) -> int:
     same word wrong three times.
     """
     word = word.strip().lower()
-    with _connect() as conn:
-        row = conn.execute(
+    with _use(conn) as connection:
+        row = connection.execute(
             """
             INSERT INTO misspellings (word, typed) VALUES (?, ?)
             ON CONFLICT(word) DO UPDATE
@@ -223,10 +250,12 @@ def record_misspelling(word: str, typed: str) -> int:
     return row["misses"]
 
 
-def clear_misspelling(word: str) -> None:
+def clear_misspelling(word: str, conn: sqlite3.Connection | None = None) -> None:
     """Forget the running count, once the word has earned its place on the list."""
-    with _connect() as conn:
-        conn.execute("DELETE FROM misspellings WHERE word = ?", (word.strip().lower(),))
+    with _use(conn) as connection:
+        connection.execute(
+            "DELETE FROM misspellings WHERE word = ?", (word.strip().lower(),)
+        )
 
 
 def seed_from_file(path: Path) -> int:
@@ -239,11 +268,14 @@ def seed_from_file(path: Path) -> int:
     return len(words)
 
 
-def count_drilling_words() -> int:
+def count_drilling_words(conn: sqlite3.Connection | None = None) -> int:
     """How many words are still in rotation. Mastered ones don't count, so the
-    list makes room for itself as you improve."""
-    with _connect() as conn:
-        row = conn.execute(
+    list makes room for itself as you improve.
+
+    Inside a transaction, pass its connection: another connection can't see the
+    words that transaction has added but not committed yet."""
+    with _use(conn) as connection:
+        row = connection.execute(
             "SELECT COUNT(*) AS n FROM words WHERE status = 'drilling'"
         ).fetchone()
     return row["n"]
@@ -295,11 +327,12 @@ def record_drill(
     typed: str,
     duration_ms: int,
     session_id: int | None = None,
+    conn: sqlite3.Connection | None = None,
 ) -> None:
     """Log one timed sentence. The raw material for words-per-minute, which
     can't be backfilled if we don't capture it as it happens."""
-    with _connect() as conn:
-        conn.execute(
+    with _use(conn) as connection:
+        connection.execute(
             """
             INSERT INTO drills (sentence, typed, duration_ms, session_id)
             VALUES (?, ?, ?, ?)
@@ -390,23 +423,30 @@ def record_result(
     typed: str,
     correct: bool,
     session_id: int | None = None,
+    conn: sqlite3.Connection | None = None,
 ) -> None:
     """Log a raw attempt and roll the word's stats forward."""
     word = word.strip().lower()
     today = date.today().isoformat()
-    with _connect() as conn:
-        conn.execute(
+    with _use(conn) as connection:
+        connection.execute(
             """
             INSERT INTO attempts (word, typed, correct, session_id)
             VALUES (?, ?, ?, ?)
             """,
             (word, typed, int(correct), session_id),
         )
-        row = conn.execute("SELECT * FROM words WHERE word = ?", (word,)).fetchone()
+        row = connection.execute(
+            "SELECT * FROM words WHERE word = ?", (word,)
+        ).fetchone()
         if row is None:
             # A generated word we weren't tracking yet — start tracking it.
-            conn.execute("INSERT INTO words (word, source) VALUES (?, 'session')", (word,))
-            row = conn.execute("SELECT * FROM words WHERE word = ?", (word,)).fetchone()
+            connection.execute(
+                "INSERT INTO words (word, source) VALUES (?, 'session')", (word,)
+            )
+            row = connection.execute(
+                "SELECT * FROM words WHERE word = ?", (word,)
+            ).fetchone()
 
         attempts = row["attempts"] + 1
         misses = row["misses"] + (0 if correct else 1)
@@ -417,7 +457,7 @@ def record_result(
         elif not correct:
             status = "drilling"  # a miss pulls a word back into rotation
 
-        conn.execute(
+        connection.execute(
             """
             UPDATE words
             SET attempts = ?, misses = ?, streak = ?, status = ?, last_seen = ?
@@ -464,12 +504,14 @@ def write_session_transcript(
     return path
 
 
-def finish_session(session_id: int, new_words: list[dict]) -> None:
+def finish_session(
+    session_id: int, new_words: list[dict], conn: sqlite3.Connection | None = None
+) -> None:
     """Record the words a session earned, so a past session pulled up from the
     Stats tab shows the same additions the results screen showed live."""
-    with _connect() as conn:
+    with _use(conn) as connection:
         for w in new_words:
-            conn.execute(
+            connection.execute(
                 "INSERT INTO session_new_words (session_id, word, reason) VALUES (?, ?, ?)",
                 (session_id, w["word"], w["reason"]),
             )
