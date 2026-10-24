@@ -23,7 +23,7 @@ make backend
 make frontend
 ```
 
-Open the URL from `make frontend`. Needs an API key in `.env` at the repo root (see `.env.example`), unless you're running the local provider (see Setup).
+Open the URL from `make frontend`. Runs on a local Ollama model by default, so no API key is needed (see Setup).
 
 The backend port is set in the `Makefile`, the frontend port in `frontend/vite.config.ts`.
 
@@ -43,17 +43,17 @@ The testing profile lets you click through the UI without paying for model calls
 
 ## Setup
 
-Edit `.env` at the repo root with your API key:
+By default the app runs free and local: have [Ollama](https://ollama.com) running with a text model pulled (`OLLAMA_MODEL`, defaults to `qwen3.5:4b`). No key and no internet needed, but only as good as the model you've got pulled.
+
+To use a paid model instead, edit `.env` at the repo root:
 
 ```
 ANTHROPIC_API_KEY=your-key-here
 OPENAI_API_KEY=your-key-here
-# LLM_PROVIDER=anthropic|openai|local, defaults to anthropic
+LLM_PROVIDER=anthropic  # or openai, local is the default
 ```
 
-Only set the keys you're actually using. If a provider's key is missing, the server prints which variable it needs rather than crashing.
-
-Or run it free, locally: set `LLM_PROVIDER=local` and have [Ollama](https://ollama.com) running with a text model pulled (`OLLAMA_MODEL`, defaults to `qwen3.5:4b`). No key and no internet needed, but slower and only as good as the model you've got pulled.
+Only set the key for the provider you're using. If it's missing, the server prints which variable it needs rather than crashing.
 
 ## Known rough edges
 

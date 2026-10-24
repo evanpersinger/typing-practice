@@ -67,8 +67,9 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3.5:4b")
 # can be checked after the fact. Local and gitignored, like typing.db.
 LLM_LOG = BASE_DIR / "llm_calls.jsonl"
 
-# Anthropic stays the default, so an existing .env keeps working untouched.
-PROVIDER = os.getenv("LLM_PROVIDER", "anthropic").strip().lower()
+# Local is the default, so the app costs nothing to run unless .env opts in to a
+# paid provider.
+PROVIDER = os.getenv("LLM_PROVIDER", "local").strip().lower()
 
 _client: Anthropic | OpenAI | None = None
 
