@@ -8,6 +8,7 @@ import {
   type RefObject,
 } from "react";
 import { fetchDrills, submitResults, type Drill } from "../api";
+import { reachedEnd } from "../grade";
 import {
   FREE_CARET,
   FREE_MISS,
@@ -96,7 +97,7 @@ export function SentenceBoard({
   strict?: boolean;
   inputRef: RefObject<HTMLInputElement>;
   onChange: (e: ChangeEvent<HTMLInputElement>) => void;
-  onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
+  onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
 }) {
   return (
     <div className={PROMPT_BOARD} onClick={() => inputRef.current?.focus()}>
@@ -272,9 +273,12 @@ export function usePractice(
     setPhase("idle");
   }
 
-  function nextSentence() {
+  /** `finalText` is passed in rather than read from `current`: this runs inside
+   *  the keystroke that finished the sentence, before that keystroke has reached
+   *  state. */
+  function nextSentence(finalText: string) {
     const updatedTyped = [...typed];
-    updatedTyped[index] = current;
+    updatedTyped[index] = finalText;
     setTyped(updatedTyped);
 
     stopClock();
@@ -295,18 +299,16 @@ export function usePractice(
     const now = Date.now();
     bankSinceLastKey(now);
     lastKeyAt.current = now;
-    setCurrent(e.target.value);
-  }
 
-  /** Enter moves to the next sentence, but only once you've reached the end of
-   *  this one. Length, not correctness: a sentence typed wrong is still a
-   *  sentence you typed, and grading it is the whole point. Short of the end it
-   *  does nothing, and the letters still unlit past the caret say why. */
-  function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key !== "Enter") return;
-    e.preventDefault();
-    if (current.length < drills[index].sentence.length) return;
-    nextSentence();
+    // The next sentence appears the moment you type the last character of this
+    // one. Reaching the end, not typing it right: a sentence typed wrong is
+    // still a sentence you typed, and grading it is the whole point.
+    const value = e.target.value;
+    if (reachedEnd(value, drills[index].sentence)) {
+      nextSentence(value);
+    } else {
+      setCurrent(value);
+    }
   }
 
   return {
@@ -321,7 +323,6 @@ export function usePractice(
     reset,
     stopClock,
     handleChange,
-    handleKeyDown,
   };
 }
 
@@ -336,16 +337,7 @@ export function Practice({
   state: PracticeState;
   error: string | null;
 }) {
-  const {
-    phase,
-    drills,
-    index,
-    current,
-    inputRef,
-    start,
-    handleChange,
-    handleKeyDown,
-  } = state;
+  const { phase, drills, index, current, inputRef, start, handleChange } = state;
 
   return (
     <>
@@ -383,7 +375,6 @@ export function Practice({
             typed={current}
             inputRef={inputRef}
             onChange={handleChange}
-            onKeyDown={handleKeyDown}
           />
           {error && <p className="mt-4 text-[#ff7a70]">{error}</p>}
         </>
