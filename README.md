@@ -47,7 +47,8 @@ Edit `.env` at the repo root with your API key:
 
 ```
 ANTHROPIC_API_KEY=your-key-here
-LLM_PROVIDER=openai  # or omit this to use Anthropic by default
+OPENAI_API_KEY=your-key-here
+# LLM_PROVIDER=anthropic|openai|local, defaults to anthropic
 ```
 
 Only set the keys you're actually using. If a provider's key is missing, the server prints which variable it needs rather than crashing.
