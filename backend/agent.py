@@ -6,12 +6,17 @@ start. Set LLM_PROVIDER in .env to pick which provider runs it.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import random
 import re
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import requests
 from anthropic import Anthropic
@@ -57,6 +62,10 @@ KEY_VARS = {
 # Override either in .env if your setup differs.
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3.5:4b")
+
+# One line per model call, appended here, so what the model actually returned
+# can be checked after the fact. Local and gitignored, like typing.db.
+LLM_LOG = BASE_DIR / "llm_calls.jsonl"
 
 # Anthropic stays the default, so an existing .env keeps working untouched.
 PROVIDER = os.getenv("LLM_PROVIDER", "anthropic").strip().lower()
@@ -157,6 +166,41 @@ def _parse(prompt: str, max_tokens: int, output_format: type[T]) -> T:
     return response.output_parsed
 
 
+@contextmanager
+def _logged_call(kind: str, asked: list[str]) -> Iterator[dict[str, Any]]:
+    """Append one line to LLM_LOG for the model call made inside the block.
+
+    The block fills in `raw` (everything the model returned) and `kept` (what
+    got past validation), and the difference is what was dropped. A call that
+    raises is logged with the error and still raises. A log that can't be
+    written never fails the request.
+    """
+    call: dict[str, Any] = {"raw": [], "kept": []}
+    started = time.monotonic()
+    try:
+        yield call
+    except Exception as e:
+        call["error"] = f"{type(e).__name__}: {e}"
+        raise
+    finally:
+        line = {
+            "time": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+            "kind": kind,
+            "provider": PROVIDER,
+            "model": OLLAMA_MODEL if PROVIDER == "local" else MODELS.get(PROVIDER),
+            "seconds": round(time.monotonic() - started, 1),
+            "asked": asked,
+            "raw": [item.model_dump() for item in call["raw"]],
+            "kept": [item.model_dump() for item in call["kept"]],
+            "error": call.get("error"),
+        }
+        try:
+            with LLM_LOG.open("a", encoding="utf-8") as log:
+                log.write(json.dumps(line, ensure_ascii=False) + "\n")
+        except OSError:
+            logger.exception("could not write %s", LLM_LOG)
+
+
 # structured output shapes (the model is forced to return exactly these)
 
 class Drill(BaseModel):
@@ -228,10 +272,12 @@ def generate_drills(words: list[str], count: int = 9) -> GeneratedDrills:
         "Keep them everyday and easy to read. "
         "For each item, list which of the target words it contains."
     )
-    generated = _parse(prompt, 1000, GeneratedDrills)
-    drills = _usable_drills(generated.drills, count)
-    if not drills:
-        raise RuntimeError(NO_USABLE_SENTENCES)
+    with _logged_call("practice", words) as call:
+        generated = _parse(prompt, 1000, GeneratedDrills)
+        drills = _usable_drills(generated.drills, count)
+        call.update(raw=generated.drills, kept=drills)
+        if not drills:
+            raise RuntimeError(NO_USABLE_SENTENCES)
     return GeneratedDrills(drills=drills)
 
 
@@ -358,8 +404,10 @@ def generate_punctuation_drills(
         "to read. Return each sentence with its feature written exactly as "
         "listed.\n\n" + listed
     )
-    generated = _parse(prompt, 1000, GeneratedPunctuationDrills)
-    drills = _usable_punctuation_drills(generated.drills, len(features))
-    if not drills:
-        raise RuntimeError(NO_USABLE_SENTENCES)
+    with _logged_call("punctuation", features) as call:
+        generated = _parse(prompt, 1000, GeneratedPunctuationDrills)
+        drills = _usable_punctuation_drills(generated.drills, len(features))
+        call.update(raw=generated.drills, kept=drills)
+        if not drills:
+            raise RuntimeError(NO_USABLE_SENTENCES)
     return GeneratedPunctuationDrills(drills=drills)

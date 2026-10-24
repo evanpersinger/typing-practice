@@ -10,6 +10,7 @@ __pycache__/
 seed_words_personal.txt
 typing.db
 typing_test.db
+llm_calls.jsonl
 sessions/
 sessions_test/
 
