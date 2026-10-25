@@ -13,6 +13,10 @@ const WORD_SLOTS = WORD_COLUMNS * WORD_ROWS;
 // row squeezes the board and clips words).
 const WORD_TABLE_WIDTH = "w-[1095px] shrink-0";
 
+// Padding lives on what's inside a cell, not the cell, so a word's button can
+// fill the whole box and the empty slots keep the same height.
+const CELL_PADDING = "px-2 py-3";
+
 /**
  * Adding a word, and the note that comes back from it.
  *
@@ -30,13 +34,22 @@ export function useWords(
   // Result of the last add. Separate from `error`, because "already on your
   // list" is an outcome, not a failure, and shouldn't render in red.
   const [note, setNote] = useState<string | null>(null);
+  // The word clicked on the board, waiting for the Delete button. Removing is
+  // two clicks on purpose: one click on a word only picks it.
+  const [selected, setSelected] = useState<string | null>(null);
 
   /** Opening the tab clears the last visit's "added" receipt: it isn't news any
    *  more. The word list is refetched here rather than by the stats hook alone,
    *  because you can reach this tab without ever opening Stats. */
   async function open() {
     setNote(null);
+    setSelected(null);
     await refreshStats();
+  }
+
+  /** Clicking the picked word again lets go of it. */
+  function select(word: string) {
+    setSelected((current) => (current === word ? null : word));
   }
 
   async function submit() {
@@ -64,13 +77,14 @@ export function useWords(
     try {
       await removeWord(word);
       setNote(`Removed ${word}.`);
+      setSelected(null);
       await refreshStats();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not remove that word.");
     }
   }
 
-  return { draft, setDraft, note, open, submit, remove };
+  return { draft, setDraft, note, selected, open, select, submit, remove };
 }
 
 export type WordsState = ReturnType<typeof useWords>;
@@ -86,7 +100,7 @@ export function Words({
   stats: StatsResponse | null;
   error: string | null;
 }) {
-  const { draft, setDraft, note, submit, remove } = state;
+  const { draft, setDraft, note, selected, select, submit, remove } = state;
 
   // Everything still in rotation. Unlike the stats tab's table this is the whole
   // list, not just the words you've missed: a word you haven't reached yet is
@@ -101,6 +115,10 @@ export function Words({
   // words renders empty, which is what makes "47 words, 13 to spare" readable at
   // a glance. Past 60 the extra words aren't shown — the board is the board.
   const shown = weak.slice(0, WORD_SLOTS);
+
+  // Looked up on the board rather than trusted from state, so a pick that's no
+  // longer there (another profile, a word already gone) offers no Delete.
+  const picked = shown.find((w) => w.word === selected);
 
   const rows = Array.from({ length: WORD_ROWS }, (_, row) =>
     Array.from(
@@ -150,28 +168,29 @@ export function Words({
                       {row.map((entry, colIndex) => (
                         <td
                           key={colIndex}
-                          className={`rounded-md border px-2 py-3 text-center whitespace-nowrap ${
-                            entry
-                              ? // The same red a missed word gets mid-session.
-                                // Empty slots stay dim: spare room isn't
-                                // something you're getting wrong.
-                                "border-[#ff7a70] text-[#ff7a70]"
-                              : "border-[#4a4f4c]"
+                          className={`rounded-md border text-center whitespace-nowrap ${
+                            !entry
+                              ? "border-[#4a4f4c]"
+                              : entry.word === selected
+                                ? "border-white bg-[#ff7a70]/20 text-white"
+                                : // The same red a missed word gets mid-session.
+                                  // Empty slots stay dim: spare room isn't
+                                  // something you're getting wrong.
+                                  "border-[#ff7a70] text-[#ff7a70]"
                           }`}
                           aria-hidden={entry ? undefined : "true"}
                         >
                           {entry ? (
                             <button
                               type="button"
-                              className="cursor-pointer border-0 bg-transparent p-0 font-[inherit] text-inherit"
-                              title="Click to remove from your list"
-                              aria-label={`Remove ${entry.word}`}
-                              onClick={() => void remove(entry.word)}
+                              className={`block w-full cursor-pointer border-0 bg-transparent font-[inherit] text-inherit hover:underline ${CELL_PADDING}`}
+                              aria-pressed={entry.word === selected}
+                              onClick={() => select(entry.word)}
                             >
                               {entry.word}
                             </button>
                           ) : (
-                            " "
+                            <div className={CELL_PADDING}> </div>
                           )}
                         </td>
                       ))}
@@ -205,15 +224,30 @@ export function Words({
                     autoCorrect="off"
                     spellCheck={false}
                   />
-                  {/* The one green thing in the app: it's the only button
-                      that writes to your word list, and everything around it
-                      is a plain white outline. */}
-                  <button
-                    type="submit"
-                    className="cursor-pointer rounded-md border border-[#7fb069] px-6 py-3 text-[1.9rem] text-[#7fb069] no-underline hover:bg-[#7fb069]/12"
-                  >
-                    Add
-                  </button>
+                  <div className="flex gap-2.5">
+                    {/* The one green thing in the app: it's the only button
+                        that adds to your word list, and everything around it
+                        is a plain white outline. */}
+                    <button
+                      type="submit"
+                      className="flex-1 cursor-pointer rounded-md border border-[#7fb069] px-6 py-3 text-[1.9rem] text-[#7fb069] no-underline hover:bg-[#7fb069]/12"
+                    >
+                      Add
+                    </button>
+                    {/* Only once a word on the board is picked, and red like
+                        the board's words. A button, not a submit, so it
+                        can't fire the form. */}
+                    {picked && (
+                      <button
+                        type="button"
+                        className="cursor-pointer rounded-md border border-[#ff7a70] px-3 py-3 text-[1.5rem] text-[#ff7a70] no-underline hover:bg-[#ff7a70]/12"
+                        aria-label={`Delete ${picked.word}`}
+                        onClick={() => void remove(picked.word)}
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 </form>
 
                 {note && <p className="mt-0 mb-4 text-[1.3rem]">{note}</p>}
