@@ -11,7 +11,7 @@ It keeps a list of words you misspell, has an LLM write practice sentences aroun
 
 ## How it works
 
-**Practice**: Your seven weakest words plus one graduated word (a surprise re-test) rotate into 9 sentences. A session takes 10-30 seconds.
+**Practice**: Your seven weakest words, plus a graduated word when it's due for a re-test (after 1, 3, 7, then 21 days), rotate into 9 sentences. A session takes 10-30 seconds.
 
 **Free Type**: A board of common English words, minus the ones you're already drilling. Space ends a word. Miss the same word three times and it joins your weak list.
 
