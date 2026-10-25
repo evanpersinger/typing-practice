@@ -76,7 +76,6 @@ export function useWords(
     setNote(null);
     try {
       await removeWord(word);
-      setNote(`Removed ${word}.`);
       setSelected(null);
       await refreshStats();
     } catch (e) {
