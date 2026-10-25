@@ -25,6 +25,17 @@ MASTERY_STREAK = 10
 # Days a mastered word rests before it is re-tested, by how many re-tests it has
 # passed since it graduated. Past the end, the last interval repeats.
 REVIEW_INTERVALS_DAYS = (1, 3, 7, 21)
+_REVIEW_CASES = " ".join(
+    f"WHEN {i} THEN {days}" for i, days in enumerate(REVIEW_INTERVALS_DAYS[:-1])
+)
+# SQL for "this mastered word has rested as long as its review count earns".
+# Shared by the pick of which words to re-test and by the grading of one, so the
+# two can't disagree. Built from the ints above, never from anything typed.
+_REVIEW_DUE = (
+    "(last_seen IS NULL OR last_seen <= datetime('now', '-' || "
+    f"(CASE reviews {_REVIEW_CASES} ELSE {REVIEW_INTERVALS_DAYS[-1]} END) "
+    "|| ' days'))"
+)
 
 
 @dataclass(frozen=True)
@@ -331,23 +342,23 @@ def get_mastered_sample(n: int = 2) -> list[str]:
     Due means resting for the interval its review count earns (see
     REVIEW_INTERVALS_DAYS). A word that isn't due yet is left alone.
     """
-    cases = " ".join(
-        f"WHEN {i} THEN {days}" for i, days in enumerate(REVIEW_INTERVALS_DAYS[:-1])
-    )
     with _connect() as conn:
         rows = conn.execute(
             f"""
             SELECT word FROM words
-            WHERE status = 'mastered'
-              AND (last_seen IS NULL
-                   OR last_seen <= datetime('now', '-' || (
-                        CASE reviews {cases}
-                             ELSE {REVIEW_INTERVALS_DAYS[-1]} END) || ' days'))
+            WHERE status = 'mastered' AND {_REVIEW_DUE}
             ORDER BY RANDOM() LIMIT ?
             """,
             (n,),
         ).fetchall()
     return [row["word"] for row in rows]
+
+
+def _review_due(connection: sqlite3.Connection, word: str) -> bool:
+    row = connection.execute(
+        f"SELECT {_REVIEW_DUE} AS due FROM words WHERE word = ?", (word,)
+    ).fetchone()
+    return bool(row["due"])
 
 
 def get_all_words() -> list[dict]:
@@ -519,7 +530,11 @@ def record_result(
         if status == "ignored":
             pass  # still logged, but only add_word(source="user") revives it
         elif status == "mastered" and correct:
-            reviews += 1  # passed a re-test: rest longer next time
+            # A re-test is one sitting, but the same word can be a target in
+            # several sentences of it. Only the first, while the word is due,
+            # counts as passing; by the next one its last_seen is just now.
+            if _review_due(connection, word):
+                reviews += 1  # passed a re-test: rest longer next time
         elif correct and streak >= MASTERY_STREAK:
             status = "mastered"
             reviews = 0

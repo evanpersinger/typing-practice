@@ -125,10 +125,30 @@ def _age(word: str, days: int) -> None:
         )
 
 
-def test_fresh_master_is_not_due_until_a_day_has_passed() -> None:
+def _set_reviews(word: str, reviews: int) -> None:
+    with db.transaction() as conn:
+        conn.execute("UPDATE words SET reviews = ? WHERE word = ?", (reviews, word))
+
+
+def _reviews(word: str) -> int:
+    with db.transaction() as conn:
+        row = conn.execute(
+            "SELECT reviews FROM words WHERE word = ?", (word,)
+        ).fetchone()
+    return row["reviews"]
+
+
+@pytest.mark.parametrize(
+    ("reviews", "days"), [(0, 1), (1, 3), (2, 7), (3, 21), (5, 21)]
+)
+def test_a_mastered_word_is_due_once_it_has_rested_its_interval(
+    reviews: int, days: int
+) -> None:
     _master("necessary")
+    _set_reviews("necessary", reviews)
+    _age("necessary", days - 1)
     assert db.get_mastered_sample(5) == []
-    _age("necessary", 2)
+    _age("necessary", days)
     assert db.get_mastered_sample(5) == ["necessary"]
 
 
@@ -145,7 +165,27 @@ def test_each_passed_retest_lengthens_the_rest() -> None:
 def test_failed_retest_drops_back_to_drilling_and_resets_reviews() -> None:
     _master("necessary")
     _age("necessary", 2)
+    db.record_result("necessary", "necessary", True)  # reviews is now 1
     db.record_result("necessary", "neccesary", False)
-    stats = row("necessary")
-    assert stats["status"] == "drilling"
-    assert db.get_mastered_sample(5) == []
+
+    assert row("necessary")["status"] == "drilling"
+    assert _reviews("necessary") == 0
+
+
+def test_a_word_in_several_sentences_of_one_sitting_is_one_retest() -> None:
+    _master("necessary")
+    _age("necessary", 2)
+    for _ in range(3):
+        db.record_result("necessary", "necessary", True)
+
+    assert _reviews("necessary") == 1
+
+
+def test_a_database_from_before_reviews_gets_the_column_on_boot() -> None:
+    with db.transaction() as conn:
+        conn.execute("ALTER TABLE words DROP COLUMN reviews")
+    db.add_word("necessary")
+
+    db.init_db()
+
+    assert _reviews("necessary") == 0
