@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { setProfile, type Profile } from "./api";
 import { FreeType, useFreeType } from "./sections/freeType";
 import { Practice, usePractice } from "./sections/practice";
@@ -210,6 +210,59 @@ export default function App() {
     tab === "roadmap"
       ? "Each square is a section to finish. The car is how far down the road you've got."
       : null;
+
+  // Keyboard flow. Esc ends the session you're in; off the typing screens,
+  // Enter or Space starts one and 1-6 switch tabs. Nothing but Esc is bound
+  // while typing, and nothing at all while a text field or button has focus,
+  // so the keys can't steal characters or fire a button twice. Re-bound every
+  // render rather than memoised: the handlers close over this render's state.
+  useEffect(() => {
+    if (profile === null) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === "Escape") {
+        if (endTyping) {
+          e.preventDefault();
+          endTyping();
+        }
+        return;
+      }
+      if (endTyping) return;
+      const el = e.target as HTMLElement | null;
+      if (el && el.closest("input, textarea, select, button, [contenteditable]"))
+        return;
+      const tabs = [
+        openPractice,
+        openFreeType,
+        openPunctuation,
+        openRoadmap,
+        openStats,
+        openWords,
+      ];
+      const n = Number(e.key);
+      if (n >= 1 && n <= tabs.length) {
+        e.preventDefault();
+        void tabs[n - 1]();
+        return;
+      }
+      if (e.key === "Enter" || e.key === " ") {
+        const start =
+          tab === "practice" && practice.phase === "idle"
+            ? practice.start
+            : tab === "punctuation" && punctuation.phase === "idle"
+              ? punctuation.start
+              : tab === "free" && freeType.phase === "idle"
+                ? freeType.start
+                : null;
+        if (start) {
+          e.preventDefault();
+          void start();
+        }
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   if (profile === null) {
     return (
