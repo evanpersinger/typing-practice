@@ -395,9 +395,11 @@ export function Stats({
   const totalMisses = drilled.reduce((sum, w) => sum + w.misses, 0);
 
   // Every word with at least one miss, worst first. No cap: this table is
-  // the one place the app tells you what to work on, not a highlight reel.
+  // the one place the app tells you what to work on, not a highlight reel. A
+  // word you removed from your list is no longer something to work on, so it's
+  // left out here, though its attempts stay in the totals above.
   const missed = drilled
-    .filter((w) => w.misses > 0)
+    .filter((w) => w.misses > 0 && w.status !== "ignored")
     .sort((a, b) => b.misses - a.misses || b.attempts - a.attempts);
 
   return (
