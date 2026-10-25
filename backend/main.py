@@ -587,6 +587,12 @@ def list_sessions(profile: Profile):
     return {"sessions": db.list_sessions()}
 
 
+@app.get("/progress")
+def get_progress(profile: Profile):
+    """Accuracy and wpm per day practiced, oldest first, for the Stats charts."""
+    return {"days": db.get_daily_progress()}
+
+
 @app.get("/sessions/{session_id}")
 def get_session(session_id: int, profile: Profile):
     """One past session's full recap, same shape the results screen shows live."""

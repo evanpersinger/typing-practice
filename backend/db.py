@@ -533,6 +533,60 @@ def list_sessions() -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def get_daily_progress() -> list[dict]:
+    """One row per day you practiced, oldest first, for the Stats charts.
+
+    A day is the local date a session started on, so several sittings in one day
+    are one point. Accuracy and wpm are pooled over the whole day, wpm the same
+    way as `get_typing_stats` (total characters over total time). A day with
+    attempts but no timed drill has `wpm` None rather than a made-up zero.
+
+    The two tables are totalled per session before they meet, because joining
+    attempts to drills directly would multiply every row by the other's count.
+    """
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            WITH attempt_totals AS (
+                SELECT session_id, COUNT(*) AS attempts, SUM(correct) AS correct
+                FROM attempts
+                GROUP BY session_id
+            ),
+            drill_totals AS (
+                SELECT session_id,
+                       SUM(LENGTH(typed)) AS chars,
+                       SUM(duration_ms)   AS total_ms
+                FROM drills
+                WHERE duration_ms > 0 AND LENGTH(typed) > 0
+                GROUP BY session_id
+            )
+            SELECT date(s.started_at, 'localtime') AS day,
+                   SUM(a.attempts) AS attempts,
+                   SUM(a.correct)  AS correct,
+                   SUM(d.chars)    AS chars,
+                   SUM(d.total_ms) AS total_ms
+            FROM sessions s
+            JOIN attempt_totals a ON a.session_id = s.id
+            LEFT JOIN drill_totals d ON d.session_id = s.id
+            GROUP BY day
+            ORDER BY day
+            """
+        ).fetchall()
+
+    return [
+        {
+            "day": row["day"],
+            "accuracy": round(100 * row["correct"] / row["attempts"]),
+            "wpm": (
+                round(row["chars"] * 60000 / (5 * row["total_ms"]))
+                if row["total_ms"]
+                else None
+            ),
+        }
+        for row in rows
+    ]
+
+
 def get_session_detail(session_id: int) -> dict | None:
     """The full recap for one past session, reconstructed from the DB in the
     same shape the results screen already renders live after finishing."""
