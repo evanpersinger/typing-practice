@@ -22,6 +22,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Clean hits in a row before a word graduates from "drilling" to "mastered".
 MASTERY_STREAK = 10
+# Days a mastered word rests before it is re-tested, by how many re-tests it has
+# passed since it graduated. Past the end, the last interval repeats.
+REVIEW_INTERVALS_DAYS = (1, 3, 7, 21)
 
 
 @dataclass(frozen=True)
@@ -179,10 +182,11 @@ def init_db() -> None:
         # their boundaries from timestamps would invent history we don't have.
         _add_column(conn, "attempts", "session_id INTEGER REFERENCES sessions(id)")
         _add_column(conn, "drills", "session_id INTEGER REFERENCES sessions(id)")
+        _add_column(conn, "words", "reviews INTEGER NOT NULL DEFAULT 0")
 
 
 # The tables _add_column may alter. The name goes into SQL as text, so nothing else gets through.
-MIGRATABLE_TABLES = {"attempts", "drills"}
+MIGRATABLE_TABLES = {"attempts", "drills", "words"}
 
 
 def _add_column(conn: sqlite3.Connection, table: str, declaration: str) -> None:
@@ -322,10 +326,25 @@ def get_drilling_words(limit: int = 10) -> list[str]:
 
 
 def get_mastered_sample(n: int = 2) -> list[str]:
-    """A few graduated words for surprise re-tests, so they don't creep back."""
+    """Graduated words that are due for a re-test, so they don't creep back.
+
+    Due means resting for the interval its review count earns (see
+    REVIEW_INTERVALS_DAYS). A word that isn't due yet is left alone.
+    """
+    cases = " ".join(
+        f"WHEN {i} THEN {days}" for i, days in enumerate(REVIEW_INTERVALS_DAYS[:-1])
+    )
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT word FROM words WHERE status = 'mastered' ORDER BY RANDOM() LIMIT ?",
+            f"""
+            SELECT word FROM words
+            WHERE status = 'mastered'
+              AND (last_seen IS NULL
+                   OR last_seen <= datetime('now', '-' || (
+                        CASE reviews {cases}
+                             ELSE {REVIEW_INTERVALS_DAYS[-1]} END) || ' days'))
+            ORDER BY RANDOM() LIMIT ?
+            """,
             (n,),
         ).fetchall()
     return [row["word"] for row in rows]
@@ -496,21 +515,26 @@ def record_result(
         misses = row["misses"] + (0 if correct else 1)
         streak = row["streak"] + 1 if correct else 0
         status = row["status"]
+        reviews = row["reviews"]
         if status == "ignored":
             pass  # still logged, but only add_word(source="user") revives it
+        elif status == "mastered" and correct:
+            reviews += 1  # passed a re-test: rest longer next time
         elif correct and streak >= MASTERY_STREAK:
             status = "mastered"
+            reviews = 0
         elif not correct:
             status = "drilling"  # a miss pulls a word back into rotation
+            reviews = 0
 
         connection.execute(
             """
             UPDATE words
-            SET attempts = ?, misses = ?, streak = ?, status = ?,
+            SET attempts = ?, misses = ?, streak = ?, status = ?, reviews = ?,
                 last_seen = datetime('now')
             WHERE word = ?
             """,
-            (attempts, misses, streak, status, word),
+            (attempts, misses, streak, status, reviews, word),
         )
 
 

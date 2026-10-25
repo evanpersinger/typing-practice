@@ -109,3 +109,43 @@ def test_adding_an_ignored_word_yourself_brings_it_back() -> None:
 
 def test_ignoring_an_unknown_word_reports_false() -> None:
     assert not db.ignore_word("nope")
+
+
+def _master(word: str) -> None:
+    db.add_word(word)
+    for _ in range(db.MASTERY_STREAK):
+        db.record_result(word, word, True)
+
+
+def _age(word: str, days: int) -> None:
+    with db.transaction() as conn:
+        conn.execute(
+            "UPDATE words SET last_seen = datetime('now', ?) WHERE word = ?",
+            (f"-{days} days", word),
+        )
+
+
+def test_fresh_master_is_not_due_until_a_day_has_passed() -> None:
+    _master("necessary")
+    assert db.get_mastered_sample(5) == []
+    _age("necessary", 2)
+    assert db.get_mastered_sample(5) == ["necessary"]
+
+
+def test_each_passed_retest_lengthens_the_rest() -> None:
+    _master("necessary")
+    _age("necessary", 2)
+    db.record_result("necessary", "necessary", True)  # first review passed
+    _age("necessary", 2)
+    assert db.get_mastered_sample(5) == []  # now needs 3 days
+    _age("necessary", 4)
+    assert db.get_mastered_sample(5) == ["necessary"]
+
+
+def test_failed_retest_drops_back_to_drilling_and_resets_reviews() -> None:
+    _master("necessary")
+    _age("necessary", 2)
+    db.record_result("necessary", "neccesary", False)
+    stats = row("necessary")
+    assert stats["status"] == "drilling"
+    assert db.get_mastered_sample(5) == []
