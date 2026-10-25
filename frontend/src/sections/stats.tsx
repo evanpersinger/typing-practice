@@ -1,8 +1,12 @@
+import { scaleLinear, scalePoint } from "d3-scale";
+import { line } from "d3-shape";
 import { useState } from "react";
 import {
+  fetchProgress,
   fetchSessionDetail,
   fetchSessions,
   fetchStats,
+  type DayProgress,
   type NewWord,
   type SessionDetail,
   type SessionSummary,
@@ -10,7 +14,7 @@ import {
   type TypingStats,
   type WordResult,
 } from "../api";
-import { pct } from "../ui";
+import { pct, WORD_SURFACE } from "../ui";
 
 // Section headings: separated from body text by weight and size alone, never by
 // dimming. Every bit of body text stays pure white.
@@ -23,6 +27,134 @@ const TABLE =
   "w-full border-collapse text-[1.1rem] " +
   "[&_th]:border-b [&_th]:border-[#7d827e] [&_th]:py-2 [&_th]:pr-3 [&_th]:pl-0 [&_th]:text-left [&_th]:font-semibold " +
   "[&_td]:border-b [&_td]:border-[#3f4441] [&_td]:py-2 [&_td]:pr-3 [&_td]:pl-0";
+
+// The chart is drawn in the pixels of a fixed viewBox sized so two sit side by
+// side in the 880px page column, then scales to whatever its panel is. Close to
+// 1:1 there, so the axis text keeps its size.
+const CHART_WIDTH = 400;
+const CHART_HEIGHT = 220;
+const CHART_MARGIN = { top: 16, right: 16, bottom: 36, left: 48 };
+const CHART_TICKS = 4;
+const MAX_DAY_LABELS = 6;
+
+interface ChartPoint {
+  day: string;
+  value: number | null;
+}
+
+// "2026-10-24" as a local date. new Date("2026-10-24") alone reads it as UTC,
+// which in a timezone behind UTC is the evening before.
+function formatDay(day: string): string {
+  return new Date(`${day}T00:00:00`).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/**
+ * One value per day you practiced, as a line. The days are evenly spaced
+ * whatever the gap between them, so a month off doesn't squash the recent days
+ * into a corner. A day with no value (no timed sentence, so no wpm) breaks the
+ * line instead of dropping to zero.
+ *
+ * `yMax` pins the top of the axis, for a percentage; without it the axis fits
+ * the data.
+ */
+function ProgressChart({
+  title,
+  points,
+  unit = "",
+  yMax,
+}: {
+  title: string;
+  points: ChartPoint[];
+  unit?: string;
+  yMax?: number;
+}) {
+  const x = scalePoint<string>()
+    .domain(points.map((p) => p.day))
+    .range([CHART_MARGIN.left, CHART_WIDTH - CHART_MARGIN.right])
+    .padding(0.5);
+  const top = yMax ?? Math.max(1, ...points.map((p) => p.value ?? 0));
+  const y = scaleLinear()
+    .domain([0, top])
+    .nice()
+    .range([CHART_HEIGHT - CHART_MARGIN.bottom, CHART_MARGIN.top]);
+
+  const known = points.flatMap((p) =>
+    p.value === null ? [] : [{ day: p.day, value: p.value }],
+  );
+  const path = line<ChartPoint>()
+    .defined((p) => p.value !== null)
+    .x((p) => x(p.day) ?? 0)
+    .y((p) => y(p.value ?? 0))(points);
+
+  const labelEvery = Math.ceil(points.length / MAX_DAY_LABELS);
+
+  return (
+    <div className={`${WORD_SURFACE} min-w-[20rem] flex-1 p-4`}>
+      <h2 className={HEADING}>{title}</h2>
+      <svg
+        viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+        role="img"
+        aria-label={`${title} for each day you practiced`}
+        className="w-full"
+      >
+        {y.ticks(CHART_TICKS).map((tick) => (
+          <g key={tick}>
+            <line
+              x1={CHART_MARGIN.left}
+              x2={CHART_WIDTH - CHART_MARGIN.right}
+              y1={y(tick)}
+              y2={y(tick)}
+              stroke="#7d827e"
+              strokeOpacity={0.5}
+            />
+            <text
+              x={CHART_MARGIN.left - 8}
+              y={y(tick)}
+              dy="0.32em"
+              textAnchor="end"
+              fill="white"
+              fontSize={14}
+            >
+              {tick}
+              {unit}
+            </text>
+          </g>
+        ))}
+
+        {points.map(
+          (p, i) =>
+            i % labelEvery === 0 && (
+              <text
+                key={p.day}
+                x={x(p.day)}
+                y={CHART_HEIGHT - CHART_MARGIN.bottom + 22}
+                textAnchor="middle"
+                fill="white"
+                fontSize={14}
+              >
+                {formatDay(p.day)}
+              </text>
+            ),
+        )}
+
+        {path && (
+          <path d={path} fill="none" stroke="white" strokeWidth={2.5} />
+        )}
+        {known.map((p) => (
+          <circle key={p.day} cx={x(p.day)} cy={y(p.value)} r={4.5} fill="white">
+            <title>
+              {formatDay(p.day)}: {p.value}
+              {unit}
+            </title>
+          </circle>
+        ))}
+      </svg>
+    </div>
+  );
+}
 
 interface WordRecap {
   word: string;
@@ -178,6 +310,7 @@ function SessionRecap({
 export function useStats(setError: (message: string | null) => void) {
   const [data, setData] = useState<StatsResponse | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[] | null>(null);
+  const [progress, setProgress] = useState<DayProgress[] | null>(null);
   const [selectedId, setSelectedId] = useState<number | "">("");
   const [detail, setDetail] = useState<SessionDetail | null>(null);
 
@@ -194,12 +327,14 @@ export function useStats(setError: (message: string | null) => void) {
   /** Both halves at once, for the tab that shows the session dropdown. */
   async function open() {
     try {
-      const [stats, sessionList] = await Promise.all([
+      const [stats, sessionList, days] = await Promise.all([
         fetchStats(),
         fetchSessions(),
+        fetchProgress(),
       ]);
       setData(stats);
       setSessions(sessionList);
+      setProgress(days);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load stats.");
     }
@@ -222,11 +357,22 @@ export function useStats(setError: (message: string | null) => void) {
   function reset() {
     setData(null);
     setSessions(null);
+    setProgress(null);
     setSelectedId("");
     setDetail(null);
   }
 
-  return { data, sessions, selectedId, detail, refresh, open, selectSession, reset };
+  return {
+    data,
+    sessions,
+    progress,
+    selectedId,
+    detail,
+    refresh,
+    open,
+    selectSession,
+    reset,
+  };
 }
 
 export type StatsState = ReturnType<typeof useStats>;
@@ -240,7 +386,7 @@ export function Stats({
   state: StatsState;
   error: string | null;
 }) {
-  const { data, sessions, selectedId, detail, selectSession } = state;
+  const { data, sessions, progress, selectedId, detail, selectSession } = state;
 
   // Only words you have actually typed. A seeded word you've never seen says
   // nothing about your spelling, and right now forty of the forty are seeds.
@@ -280,6 +426,32 @@ export function Stats({
               </div>
             </div>
           </section>
+
+          {progress && (
+            <section>
+              {progress.length < 2 ? (
+                <p className="m-0 text-[1.1rem]">
+                  Practice on at least 2 different days to see your progress.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-6">
+                  <ProgressChart
+                    title="wpm by day"
+                    points={progress.map((p) => ({ day: p.day, value: p.wpm }))}
+                  />
+                  <ProgressChart
+                    title="accuracy by day"
+                    points={progress.map((p) => ({
+                      day: p.day,
+                      value: p.accuracy,
+                    }))}
+                    unit="%"
+                    yMax={100}
+                  />
+                </div>
+              )}
+            </section>
+          )}
 
           <section>
             <h2 className={HEADING}>words you struggle with</h2>

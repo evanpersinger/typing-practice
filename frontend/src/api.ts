@@ -110,6 +110,14 @@ export interface SessionSummary {
   started_at: string;
 }
 
+/** One day you practiced, for the Stats charts. `day` is a local YYYY-MM-DD.
+ *  `wpm` is null on a day with attempts but no timed sentence. */
+export interface DayProgress {
+  day: string;
+  accuracy: number;
+  wpm: number | null;
+}
+
 export interface SessionDetail {
   id: number;
   started_at: string;
@@ -151,6 +159,13 @@ export async function fetchSessions(): Promise<SessionSummary[]> {
   if (!res.ok) throw new Error(`Failed to load sessions (${res.status})`);
   const data = await res.json();
   return data.sessions;
+}
+
+export async function fetchProgress(): Promise<DayProgress[]> {
+  const res = await fetch(`${API_BASE}/progress`, { headers: headers() });
+  if (!res.ok) throw new Error(`Failed to load progress (${res.status})`);
+  const data = await res.json();
+  return data.days;
 }
 
 export async function fetchSessionDetail(id: number): Promise<SessionDetail> {
