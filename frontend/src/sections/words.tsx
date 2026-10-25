@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { addWord, type StatsResponse } from "../api";
+import { addWord, removeWord, type StatsResponse } from "../api";
 import { WORD_SURFACE } from "../ui";
 
 // A fixed 6-by-10 board: the same 60 cells whatever the word count, so the
@@ -58,7 +58,19 @@ export function useWords(
     }
   }
 
-  return { draft, setDraft, note, open, submit };
+  async function remove(word: string) {
+    setError(null);
+    setNote(null);
+    try {
+      await removeWord(word);
+      setNote(`Removed ${word}.`);
+      await refreshStats();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not remove that word.");
+    }
+  }
+
+  return { draft, setDraft, note, open, submit, remove };
 }
 
 export type WordsState = ReturnType<typeof useWords>;
@@ -74,7 +86,7 @@ export function Words({
   stats: StatsResponse | null;
   error: string | null;
 }) {
-  const { draft, setDraft, note, submit } = state;
+  const { draft, setDraft, note, submit, remove } = state;
 
   // Everything still in rotation. Unlike the stats tab's table this is the whole
   // list, not just the words you've missed: a word you haven't reached yet is
@@ -148,7 +160,19 @@ export function Words({
                           }`}
                           aria-hidden={entry ? undefined : "true"}
                         >
-                          {entry ? entry.word : " "}
+                          {entry ? (
+                            <button
+                              type="button"
+                              className="cursor-pointer border-0 bg-transparent p-0 font-[inherit] text-inherit"
+                              title="Click to remove from your list"
+                              aria-label={`Remove ${entry.word}`}
+                              onClick={() => void remove(entry.word)}
+                            >
+                              {entry.word}
+                            </button>
+                          ) : (
+                            " "
+                          )}
                         </td>
                       ))}
                     </tr>
