@@ -85,3 +85,24 @@ def test_attempt_is_logged_against_its_session() -> None:
     assert detail["words"] == [
         {"word": "necessary", "typed": "neccesary", "correct": False}
     ]
+
+
+def test_ignored_word_stays_ignored_through_seeding_and_misses() -> None:
+    db.add_word("necessary")
+    assert db.ignore_word("necessary")
+    assert db.get_drilling_words() == []
+
+    db.add_word("necessary", source="seed")
+    db.record_result("necessary", "neccesary", False)
+    assert row("necessary")["status"] == "ignored"
+
+
+def test_adding_an_ignored_word_yourself_brings_it_back() -> None:
+    db.add_word("necessary")
+    db.ignore_word("necessary")
+    assert db.add_word("necessary", source="user")
+    assert row("necessary")["status"] == "drilling"
+
+
+def test_ignoring_an_unknown_word_reports_false() -> None:
+    assert not db.ignore_word("nope")
