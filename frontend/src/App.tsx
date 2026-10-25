@@ -213,8 +213,9 @@ export default function App() {
 
   // Keyboard flow. Esc ends the session you're in; off the typing screens,
   // Enter or Space starts one and 1-6 switch tabs. Nothing but Esc is bound
-  // while typing, and nothing at all while a text field or button has focus,
-  // so the keys can't steal characters or fire a button twice. Re-bound every
+  // while typing, and nothing at all while a text field has focus, so the keys
+  // can't steal characters. Enter and Space also stand down for a focused
+  // button, which they would otherwise press a second time. Re-bound every
   // render rather than memoised: the handlers close over this render's state.
   useEffect(() => {
     if (profile === null) return;
@@ -229,8 +230,7 @@ export default function App() {
       }
       if (endTyping) return;
       const el = e.target as HTMLElement | null;
-      if (el && el.closest("input, textarea, select, button, [contenteditable]"))
-        return;
+      if (el && el.closest("input, textarea, select, [contenteditable]")) return;
       const tabs = [
         openPractice,
         openFreeType,
@@ -245,6 +245,7 @@ export default function App() {
         void tabs[n - 1]();
         return;
       }
+      if (el && el.closest("button")) return;
       if (e.key === "Enter" || e.key === " ") {
         const start =
           tab === "practice" && practice.phase === "idle"
@@ -301,7 +302,15 @@ export default function App() {
 
       {/* Absolute, not fixed, so it scrolls away over a long stats table
           instead of floating on top of it. */}
-      <nav className="absolute top-7 left-1/2 flex -translate-x-1/2 gap-6">
+      {/* A mouse click leaves focus on the tab, and a focused button swallows
+          Enter and Space. Let go of it, but only for the mouse: `detail` is 0
+          when Enter or Space made the click, and then focus should stay put. */}
+      <nav
+        className="absolute top-7 left-1/2 flex -translate-x-1/2 gap-6"
+        onClick={(e) => {
+          if (e.detail > 0) (e.target as HTMLElement).closest("button")?.blur();
+        }}
+      >
         <button
           className={tab === "practice" ? TAB_ON : TAB_OFF}
           onClick={openPractice}
