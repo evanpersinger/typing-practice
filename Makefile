@@ -7,7 +7,7 @@
 # target is set in frontend/vite.config.ts. Change the backend port here and you
 # have to change it there too.
 
-.PHONY: backend frontend install
+.PHONY: backend frontend install dev
 
 backend:
 	uv run uvicorn backend.main:app --reload --port 8016
@@ -18,3 +18,10 @@ frontend:
 install:
 	uv sync
 	cd frontend && pnpm install
+
+# Both servers in one terminal; Ctrl-C stops both.
+dev:
+	trap 'kill 0' INT TERM EXIT; \
+	uv run uvicorn backend.main:app --reload --port 8016 & \
+	(cd frontend && pnpm run dev) & \
+	wait
