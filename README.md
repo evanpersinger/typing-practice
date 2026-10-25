@@ -2,6 +2,11 @@
 
 ![A practice session: typing a sentence, with wrong letters shown in red](docs/practice.gif)
 
+<p>
+  <img src="docs/free-type.png" alt="Free Type: a board of common words with your wpm and accuracy above it" width="49%">
+  <img src="docs/stats.png" alt="Stats: wpm and accuracy by day, and the words you struggle with" width="49%">
+</p>
+
 It keeps a list of words you misspell, has an LLM write practice sentences around them, and grades what you type. Words you keep missing stay in rotation, and words you get right ten times in a row graduate out.
 
 ## How it works
