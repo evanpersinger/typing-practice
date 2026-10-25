@@ -66,6 +66,16 @@ def test_word_is_trimmed_and_lowercased_before_it_is_stored() -> None:
     assert row("necessary")["attempts"] == 1
 
 
+def test_typos_are_listed_most_frequent_first_and_skips_are_left_out() -> None:
+    db.record_result("necessary", "neccesary", False)
+    db.record_result("necessary", "neccessary", False)
+    db.record_result("necessary", "neccessary", False)
+    db.record_result("necessary", "", False)  # skipped, nothing typed
+    db.record_result("necessary", "necessary", True)
+
+    assert db.get_word_typos() == {"necessary": ["neccessary", "neccesary"]}
+
+
 def test_attempt_is_logged_against_its_session() -> None:
     session_id = db.start_session()
     db.record_result("necessary", "neccesary", False, session_id)

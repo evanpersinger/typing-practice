@@ -322,6 +322,28 @@ def get_all_words() -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def get_word_typos() -> dict[str, list[str]]:
+    """Every wrong spelling you've typed for each word, most frequent first.
+
+    From `attempts`, which keeps all of them, rather than `misspellings`, which
+    only holds the latest. A skipped word has nothing typed, so it isn't a typo.
+    """
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT word, typed
+            FROM attempts
+            WHERE correct = 0 AND typed != ''
+            GROUP BY word, typed
+            ORDER BY word, COUNT(*) DESC, typed
+            """
+        ).fetchall()
+    typos: dict[str, list[str]] = {}
+    for row in rows:
+        typos.setdefault(row["word"], []).append(row["typed"])
+    return typos
+
+
 def record_drill(
     sentence: str,
     typed: str,

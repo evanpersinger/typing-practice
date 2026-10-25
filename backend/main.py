@@ -474,8 +474,9 @@ def add_practice_word(payload: WordPayload, profile: Profile):
 def get_stats(profile: Profile):
     """Everything the stats tab shows: per-word counters, typing speed, and
     the punctuation you keep missing."""
+    typos = db.get_word_typos()
     return {
-        "words": db.get_all_words(),
+        "words": [{**w, "typos": typos.get(w["word"], [])} for w in db.get_all_words()],
         "typing": db.get_typing_stats(),
         "punctuation": db.get_punctuation_stats(),
     }
