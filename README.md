@@ -1,5 +1,7 @@
 # Typing Practice
 
+![A practice session: typing a sentence, with wrong letters shown in red](docs/practice.gif)
+
 It keeps a list of words you misspell, has an LLM write practice sentences around them, and grades what you type. Words you keep missing stay in rotation, and words you get right ten times in a row graduate out.
 
 ## How it works
