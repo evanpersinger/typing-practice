@@ -191,6 +191,14 @@ export async function addWord(word: string): Promise<AddWordResponse> {
   return res.json();
 }
 
+export async function removeWord(word: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/words/${encodeURIComponent(word)}`, {
+    method: "DELETE",
+    headers: headers(),
+  });
+  if (!res.ok) throw new Error(`Failed to remove word (${res.status})`);
+}
+
 export async function submitResults(
   results: DrillResult[],
 ): Promise<AnalysisResponse> {

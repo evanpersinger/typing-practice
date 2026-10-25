@@ -221,6 +221,29 @@ def add_word(
             "INSERT OR IGNORE INTO words (word, source) VALUES (?, ?)",
             (word, source),
         )
+        if cursor.rowcount == 0 and source == "user":
+            # Seeding and the agent leave an ignored word alone; asking for it
+            # yourself is what brings it back.
+            cursor = connection.execute(
+                "UPDATE words SET status = 'drilling', streak = 0 "
+                "WHERE word = ? AND status = 'ignored'",
+                (word,),
+            )
+        return cursor.rowcount > 0
+
+
+def ignore_word(word: str, conn: sqlite3.Connection | None = None) -> bool:
+    """Take a word out of rotation. Returns whether it was tracked.
+
+    The row stays, marked 'ignored', rather than being deleted: `add_word` is
+    OR IGNORE on the UNIQUE word, so a surviving row is what stops the seed
+    file from re-adding it on the next boot.
+    """
+    with _use(conn) as connection:
+        cursor = connection.execute(
+            "UPDATE words SET status = 'ignored' WHERE word = ?",
+            (word.strip().lower(),),
+        )
         return cursor.rowcount > 0
 
 
@@ -473,7 +496,9 @@ def record_result(
         misses = row["misses"] + (0 if correct else 1)
         streak = row["streak"] + 1 if correct else 0
         status = row["status"]
-        if correct and streak >= MASTERY_STREAK:
+        if status == "ignored":
+            pass  # still logged, but only add_word(source="user") revives it
+        elif correct and streak >= MASTERY_STREAK:
             status = "mastered"
         elif not correct:
             status = "drilling"  # a miss pulls a word back into rotation

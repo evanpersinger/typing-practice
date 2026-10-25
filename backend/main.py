@@ -470,6 +470,15 @@ def add_practice_word(payload: WordPayload, profile: Profile):
     return {"word": word, "added": db.add_word(word, source="user")}
 
 
+@app.delete("/words/{word}")
+def remove_practice_word(word: str, profile: Profile):
+    """Take a word off the list. It's marked ignored, not deleted, so seeding
+    doesn't bring it back; adding it again from the Words tab does."""
+    if not db.ignore_word(word):
+        raise HTTPException(status_code=404, detail="word not found")
+    return {"word": word.strip().lower(), "removed": True}
+
+
 @app.get("/stats")
 def get_stats(profile: Profile):
     """Everything the stats tab shows: per-word counters, typing speed, and
