@@ -462,6 +462,7 @@ export function Stats({
                   <th>missed</th>
                   <th>attempts</th>
                   <th>miss rate</th>
+                  <th>you typed</th>
                 </tr>
               </thead>
               <tbody>
@@ -471,6 +472,11 @@ export function Stats({
                     <td>{w.misses}</td>
                     <td>{w.attempts}</td>
                     <td>{pct(w.misses, w.attempts)}</td>
+                    {/* "nothing" is a word you skipped, same as the session
+                        recap, rather than a blank cell. */}
+                    <td className="font-mono">
+                      {w.typos.length > 0 ? w.typos.join(", ") : "nothing"}
+                    </td>
                   </tr>
                 ))}
               </tbody>

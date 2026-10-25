@@ -64,6 +64,8 @@ export interface WordStat {
   status: string;
   source: string;
   last_seen: string | null;
+  /** Every wrong spelling you've typed for it, most frequent first. */
+  typos: string[];
 }
 
 export interface TypingStats {
