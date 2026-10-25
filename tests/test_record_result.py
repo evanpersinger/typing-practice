@@ -99,9 +99,12 @@ def test_ignored_word_stays_ignored_through_seeding_and_misses() -> None:
 
 def test_adding_an_ignored_word_yourself_brings_it_back() -> None:
     db.add_word("necessary")
+    db.record_result("necessary", "necessary", True)  # a streak to lose
     db.ignore_word("necessary")
     assert db.add_word("necessary", source="user")
-    assert row("necessary")["status"] == "drilling"
+
+    stats = row("necessary")
+    assert (stats["status"], stats["streak"]) == ("drilling", 0)
 
 
 def test_ignoring_an_unknown_word_reports_false() -> None:
