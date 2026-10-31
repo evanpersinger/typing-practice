@@ -6,8 +6,9 @@ import {
   type KeyboardEvent,
   type RefObject,
 } from "react";
-import { fetchDrills, submitResults, type Drill } from "../api";
+import { fetchDrills, fetchProgress, submitResults, type Drill } from "../api";
 import { reachedEnd } from "../grade";
+import { dayStreak, localDay } from "../streak";
 import {
   FREE_CARET,
   FREE_MISS,
@@ -337,6 +338,29 @@ export function usePractice(
 
 export type PracticeState = ReturnType<typeof usePractice>;
 
+/** Days in a row you've practiced, read again each time the start screen comes
+ *  back, so finishing a session shows it. Null until loaded, and if the stats
+ *  can't be fetched: a streak that fails to load isn't worth an error. */
+function useStreak(phase: Phase): { days: number; today: boolean } | null {
+  const [streak, setStreak] = useState<{ days: number; today: boolean } | null>(null);
+  useEffect(() => {
+    if (phase !== "idle") return;
+    let cancelled = false;
+    fetchProgress()
+      .then((days) => {
+        if (cancelled) return;
+        const practiced = days.map((d) => d.day);
+        const today = localDay();
+        setStreak({ days: dayStreak(practiced, today), today: practiced.includes(today) });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [phase]);
+  return streak;
+}
+
 /** The practice screen. Holds nothing itself: everything it draws comes off the
  *  hook above, which App keeps alive across tab switches. */
 export function Practice({
@@ -347,6 +371,7 @@ export function Practice({
   error: string | null;
 }) {
   const { phase, drills, index, current, inputRef, start, handleChange } = state;
+  const streak = useStreak(phase);
 
   return (
     <>
@@ -355,6 +380,12 @@ export function Practice({
           <button className={START_BUTTON} onClick={start}>
             Start session
           </button>
+          {streak !== null && streak.days > 0 && (
+            <p className={`${SESSION_INTRO} !mb-2`}>
+              {streak.days}-day streak.
+              {!streak.today && " Practice today to keep it going."}
+            </p>
+          )}
           <p className={SESSION_INTRO}>
             These sentences include the words you need to practice. Type one
             sentence at a time. Your results are saved when the session ends,
