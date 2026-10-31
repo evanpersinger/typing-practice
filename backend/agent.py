@@ -246,7 +246,9 @@ def _usable_drills(drills: list[Drill], count: int) -> list[Drill]:
         in_sentence = {normalize(token) for token in drill.sentence.split()}
         targets = [normalize(target) for target in drill.target_words]
         sentence = drill.sentence.strip().lower()
-        if not targets:
+        if not drill.sentence.isascii():
+            reason = "it has a character a keyboard can't type"
+        elif not targets:
             reason = "it has no target words"
         elif "" in targets:
             reason = "it has an empty target word"
@@ -271,6 +273,8 @@ def generate_drills(words: list[str], count: int = 9) -> GeneratedDrills:
         f"Weave in these words the user commonly misspells, spread across the set so "
         f"each word appears at least once: {joined}. "
         "Keep them everyday and easy to read. "
+        "Use straight ASCII characters only: no curly quotes or apostrophes, "
+        "no dashes except a hyphen, no accented letters. "
         "For each item, list which of the target words it contains."
     )
     with _logged_call("practice", words) as call:
