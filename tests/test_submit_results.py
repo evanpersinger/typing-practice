@@ -10,6 +10,8 @@ from backend.main import MAX_WEAK_WORDS, MISSPELL_STRIKES, app
 
 pytestmark = pytest.mark.usefixtures("temp_db")
 
+HEADERS = {"X-Profile": "testing"}
+
 PAYLOAD = {
     "results": [
         {
@@ -121,3 +123,36 @@ def test_a_full_list_does_not_grow_from_a_session() -> None:
 
     assert db.count_drilling_words() == MAX_WEAK_WORDS
     assert responses[-1].json()["new_words"] == []
+
+
+@pytest.mark.parametrize("duration_ms", [-5, 10**12, 10**20])
+def test_an_impossible_duration_is_untimed_not_an_error(duration_ms: int) -> None:
+    payload = {"results": [{**PAYLOAD["results"][0], "duration_ms": duration_ms}]}
+
+    with TestClient(app) as client:
+        good = client.post("/results", json=PAYLOAD, headers=HEADERS)
+        bad = client.post("/results", json=payload, headers=HEADERS)
+        stats = client.get("/stats", headers=HEADERS).json()["typing"]
+
+    assert good.status_code == 200 and bad.status_code == 200
+    assert stats == {"drills": 1, "avg_wpm": round(len(PAYLOAD["results"][0]["typed"]) * 60000 / (5 * 4000))}
+
+
+def test_a_failure_partway_through_punctuation_results_files_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    real = db.record_punctuation_miss
+    calls = []
+
+    def fails_on_the_second(*args: object, **kwargs: object) -> None:
+        calls.append(1)
+        if len(calls) == 2:
+            raise sqlite3.OperationalError("disk I/O error")
+        real(*args, **kwargs)
+
+    monkeypatch.setattr(db, "record_punctuation_miss", fails_on_the_second)
+    payload = {"results": [{"sentence": "Hello, world, again.", "typed": "Hello world again."}]}
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.post("/punctuation-results", json=payload, headers=HEADERS)
+
+    assert response.status_code == 500
+    assert db.get_punctuation_stats() == []

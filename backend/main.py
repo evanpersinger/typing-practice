@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from wordfreq import top_n_list
 
 from backend import agent, db, test_agent
@@ -340,6 +340,7 @@ def find_punctuation_misses(sentence: str, typed: str) -> list[tuple[str, str]]:
 # or drills into the grader. A real sentence is a few hundred characters.
 MAX_TEXT_LENGTH = 2000
 MAX_DRILLS_PER_SUBMIT = 100
+MAX_DRILL_MS = 24 * 60 * 60 * 1000
 
 
 class WordResult(BaseModel):
@@ -357,6 +358,15 @@ class DrillResult(BaseModel):
     target_words: list[Annotated[str, Field(max_length=MAX_TEXT_LENGTH)]] = Field(
         max_length=MAX_TEXT_LENGTH
     )
+
+    @field_validator("duration_ms")
+    @classmethod
+    def _untimed_if_impossible(cls, value: int) -> int:
+        """A negative time, or one past a day, is a bad timer (a start time of 0
+        gives 1.7 trillion ms), not a sentence. Treated as untimed, which the wpm
+        sums skip, instead of wrecking the average or overflowing SQLite's integer
+        and failing the whole submit. The sentence is still graded."""
+        return value if 0 <= value <= MAX_DRILL_MS else 0
 
 
 class ResultsPayload(BaseModel):
@@ -584,10 +594,15 @@ def submit_punctuation_results(payload: PunctuationResultsPayload, profile: Prof
     punctuation session is its own thing and its rows live in their own table.
     """
     misses: list[dict] = []
-    for drill in payload.results:
-        for mark, kind in find_punctuation_misses(drill.sentence, drill.typed):
-            db.record_punctuation_miss(mark, kind, drill.sentence, drill.typed)
-            misses.append({"mark": mark, "kind": kind, "sentence": drill.sentence})
+    # One transaction for the whole sitting, like /results: a failure partway
+    # through rolls every miss back, so the retry doesn't file the first ones twice.
+    with db.transaction() as conn:
+        for drill in payload.results:
+            for mark, kind in find_punctuation_misses(drill.sentence, drill.typed):
+                db.record_punctuation_miss(
+                    mark, kind, drill.sentence, drill.typed, conn=conn
+                )
+                misses.append({"mark": mark, "kind": kind, "sentence": drill.sentence})
     return {"misses": misses}
 
 

@@ -416,12 +416,18 @@ def record_drill(
         )
 
 
-def record_punctuation_miss(mark: str, kind: str, sentence: str, typed: str) -> None:
+def record_punctuation_miss(
+    mark: str,
+    kind: str,
+    sentence: str,
+    typed: str,
+    conn: sqlite3.Connection | None = None,
+) -> None:
     """Log one punctuation miss: which mark, and whether it was missing, extra,
     or the wrong one. A row per miss rather than a counter per mark, so the
     stats tab can show the sentence it happened in."""
-    with _connect() as conn:
-        conn.execute(
+    with _use(conn) as connection:
+        connection.execute(
             """
             INSERT INTO punctuation_misses (mark, kind, sentence, typed)
             VALUES (?, ?, ?, ?)
