@@ -1,7 +1,9 @@
 /** Lowercase and strip surrounding punctuation so "Separate," == "separate".
- *  Free Type's board uses it; Practice is graded by the backend. */
+ *  Free Type's board uses it; Practice is graded by the backend. An apostrophe
+ *  at either end goes too ("'separate" == "separate", like the backend's
+ *  normalize), but one inside a word stays: "can't" is one word. */
 export function normalize(word: string): string {
-  return word.toLowerCase().replace(/^[^a-z0-9']+|[^a-z0-9']+$/g, "");
+  return word.toLowerCase().replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, "");
 }
 
 /** Whether you've typed the whole sentence: at least as many characters as it

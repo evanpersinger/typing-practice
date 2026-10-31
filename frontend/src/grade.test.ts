@@ -8,6 +8,8 @@ describe("normalize", () => {
     ["(maybe)", "maybe"],
     ["can't.", "can't"],
     ["well-known,", "well-known"],
+    ["'separate", "separate"], // a stray apostrophe at the start or end is punctuation, as in the backend
+    ["separate'", "separate"],
   ])("turns %s into %s", (raw, expected) => {
     expect(normalize(raw)).toBe(expected);
   });
