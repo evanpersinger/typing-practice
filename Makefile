@@ -18,8 +18,3 @@ frontend:
 install:
 	uv sync
 	cd frontend && pnpm install
-
-# A dated copy of typing.db in backups/ (SQLite's own backup, safe while the app runs).
-# Another profile: make backup PROFILE=testing
-backup:
-	uv run python -m backend.backup $(PROFILE)
