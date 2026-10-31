@@ -10,10 +10,13 @@ import random
 import re
 import sqlite3
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.types import ASGIApp, Receive, Scope, Send
 from wordfreq import top_n_list
 
 from backend import agent, db, test_agent
@@ -610,3 +613,34 @@ def get_session(session_id: int, profile: Profile):
     if detail is None:
         raise HTTPException(status_code=404, detail="session not found")
     return detail
+
+
+FRONTEND_DIST = db.BASE_DIR / "frontend" / "dist"
+
+
+class StripApiPrefix:
+    """The frontend calls /api/stats and the dev server's proxy drops the /api. With no dev server in front, this does
+    the same, so one `pnpm build` serves from the backend alone."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] in ("http", "websocket") and scope["path"].startswith("/api/"):
+            scope = {**scope, "path": scope["path"][4:], "raw_path": scope.get("raw_path", b"")[4:]}
+        await self.app(scope, receive, send)
+
+
+def serve_frontend(application: FastAPI, dist: Path) -> bool:
+    """Serve a built frontend (`pnpm build`) from `/` on the same port as the API. Does nothing if it isn't built.
+
+    Registered after every route so the API wins any path both could answer.
+    """
+    if not (dist / "index.html").is_file():
+        return False
+    application.add_middleware(StripApiPrefix)
+    application.mount("/", StaticFiles(directory=dist, html=True), name="frontend")
+    return True
+
+
+serve_frontend(app, FRONTEND_DIST)
