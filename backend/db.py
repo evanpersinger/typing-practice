@@ -702,3 +702,31 @@ def get_session_detail(session_id: int) -> dict | None:
         "new_words": [dict(w) for w in new_words],
         "typing": get_typing_stats(session_id),
     }
+
+
+def export_all() -> dict[str, list[dict]]:
+    """Every row of every table in the active profile, for a JSON backup."""
+    with _connect() as conn:
+        tables = [row["name"] for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+        )]
+        return {
+            # table names come from sqlite_master above, never from the request
+            table: [dict(row) for row in conn.execute(f'SELECT * FROM "{table}"')]
+            for table in tables
+        }
+
+
+def backup_to(destination: Path) -> Path:
+    """Copy the active profile's database to destination with SQLite's own backup, so the copy is consistent even if
+    the app is writing at that moment (copying the file could catch it half-written)."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    source = sqlite3.connect(active_profile().db)
+    target = sqlite3.connect(destination)
+    try:
+        with target:
+            source.backup(target)
+    finally:
+        target.close()
+        source.close()
+    return destination

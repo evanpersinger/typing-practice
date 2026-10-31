@@ -24,3 +24,6 @@ dist/
 
 # AI 
 .playwright-mcp/
+
+# Local backups from `make backup`
+backups/

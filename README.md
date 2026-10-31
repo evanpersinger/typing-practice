@@ -36,6 +36,10 @@ The backend port is set in the `Makefile`, the frontend port in `frontend/vite.c
 
 This is a local dev setup. Both servers are dev servers, and the frontend reaches the backend through Vite's dev proxy. There is no production build or serve path.
 
+## Backups
+
+All progress lives in `typing.db`, which is not committed. `make backup` saves a dated copy in `backups/` (use `make backup PROFILE=testing` for the other profile), and it is safe to run while the app is open. `GET /export` returns the same data as JSON, one list of rows per table, with the `X-Profile` header picking the profile. There is no import yet: to restore, stop the app and copy a backup over `typing.db`.
+
 ## Profiles
 
 | | Personal | Testing |
