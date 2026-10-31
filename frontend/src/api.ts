@@ -196,7 +196,11 @@ export async function removeWord(word: string): Promise<void> {
     method: "DELETE",
     headers: headers(),
   });
-  if (!res.ok) throw new Error(`Failed to remove word (${res.status})`);
+  // A 404 means it was already removed (another tab, a double click): the word is
+  // gone either way, so the caller refreshes instead of showing an error.
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`Failed to remove word (${res.status})`);
+  }
 }
 
 export async function submitResults(
