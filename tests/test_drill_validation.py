@@ -45,6 +45,9 @@ def test_case_and_punctuation_around_a_target_do_not_matter() -> None:
         drill("A vector is not a variable.", "vector", "scalar"),  # one of two missing
         drill("Nothing to grade here."),  # no targets
         drill("Nothing to grade — here.", ""),  # an empty target
+        drill("We don\u2019t need to separate them.", "separate"),  # a curly apostrophe can't be typed
+        drill("The caf\u00e9 has separate rooms.", "separate"),  # an accented letter
+        drill("Keep them separate\u2026 please.", "separate"),  # an ellipsis character
     ],
 )
 def test_a_drill_the_grader_could_not_use_is_dropped(bad: Drill) -> None:
