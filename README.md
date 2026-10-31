@@ -32,9 +32,17 @@ make frontend
 
 Open the URL from `make frontend`. Runs on a local Ollama model by default, so no API key is needed (see Setup).
 
+To run on a single port with no Vite dev server, build the frontend and let the backend serve it:
+
+```
+make serve
+```
+
+Open http://localhost:8016. The backend serves `frontend/dist` if it exists, and forwards `/api/...` to its routes the way the dev proxy does.
+
 The backend port is set in the `Makefile`, the frontend port in `frontend/vite.config.ts`.
 
-This is a local dev setup. Both servers are dev servers, and the frontend reaches the backend through Vite's dev proxy. There is no production build or serve path.
+This is still a local setup with no login, so don't expose the port to a network.
 
 ## Profiles
 
