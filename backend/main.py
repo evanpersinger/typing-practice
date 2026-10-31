@@ -491,6 +491,12 @@ def get_stats(profile: Profile):
     }
 
 
+@app.get("/export")
+def export_progress(profile: Profile):
+    """All of this profile's data as JSON, one list of rows per table, as a backup you can read or keep."""
+    return db.export_all()
+
+
 @app.post("/results")
 def submit_results(payload: ResultsPayload, profile: Profile):
     """Session end: all bookkeeping, no model call."""

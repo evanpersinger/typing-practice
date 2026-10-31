@@ -702,3 +702,16 @@ def get_session_detail(session_id: int) -> dict | None:
         "new_words": [dict(w) for w in new_words],
         "typing": get_typing_stats(session_id),
     }
+
+
+def export_all() -> dict[str, list[dict]]:
+    """Every row of every table in the active profile, for a JSON backup."""
+    with _connect() as conn:
+        tables = [row["name"] for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+        )]
+        return {
+            # table names come from sqlite_master above, never from the request
+            table: [dict(row) for row in conn.execute(f'SELECT * FROM "{table}"')]
+            for table in tables
+        }

@@ -36,6 +36,14 @@ The backend port is set in the `Makefile`, the frontend port in `frontend/vite.c
 
 This is a local dev setup. Both servers are dev servers, and the frontend reaches the backend through Vite's dev proxy. There is no production build or serve path.
 
+## Export
+
+`GET /export` returns the active profile's data as JSON, one list of rows per table, with the `X-Profile` header picking the profile:
+
+```
+curl -H "X-Profile: personal" http://localhost:8016/export > progress.json
+```
+
 ## Profiles
 
 | | Personal | Testing |
