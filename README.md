@@ -23,20 +23,14 @@ It keeps a list of words you misspell, has an LLM write practice sentences aroun
 make install
 ```
 
-Then start both servers from one terminal (Ctrl-C stops both):
-
-```
-make dev
-```
-
-Open http://localhost:3005. Or run them separately, each in its own terminal:
+Then in two terminals:
 
 ```
 make backend
 make frontend
 ```
 
-Runs on a local Ollama model by default, so no API key is needed (see Setup).
+Open the URL from `make frontend`. Runs on a local Ollama model by default, so no API key is needed (see Setup).
 
 To run on a single port with no Vite dev server, build the frontend and let the backend serve it:
 
