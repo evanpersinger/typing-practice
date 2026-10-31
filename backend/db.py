@@ -248,7 +248,7 @@ def add_word(
 
 
 def ignore_word(word: str, conn: sqlite3.Connection | None = None) -> bool:
-    """Take a word out of rotation. Returns whether it was tracked.
+    """Take a word out of rotation. Returns whether it was tracked and not already out.
 
     The row stays, marked 'ignored', rather than being deleted: `add_word` is
     OR IGNORE on the UNIQUE word, so a surviving row is what stops the seed
@@ -256,7 +256,7 @@ def ignore_word(word: str, conn: sqlite3.Connection | None = None) -> bool:
     """
     with _use(conn) as connection:
         cursor = connection.execute(
-            "UPDATE words SET status = 'ignored' WHERE word = ?",
+            "UPDATE words SET status = 'ignored' WHERE word = ? AND status != 'ignored'",
             (word.strip().lower(),),
         )
         return cursor.rowcount > 0

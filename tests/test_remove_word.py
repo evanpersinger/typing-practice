@@ -27,3 +27,13 @@ def test_removing_a_word_that_is_not_tracked_is_a_404() -> None:
         response = client.delete("/words/nope", headers=HEADERS)
 
     assert response.status_code == 404
+
+
+def test_removing_a_word_twice_is_a_404_the_second_time() -> None:
+    db.add_word("necessary")
+
+    with TestClient(app) as client:
+        first = client.delete("/words/necessary", headers=HEADERS)
+        second = client.delete("/words/necessary", headers=HEADERS)
+
+    assert (first.status_code, second.status_code) == (200, 404)
