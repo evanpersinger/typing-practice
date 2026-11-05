@@ -120,12 +120,31 @@ def _parse_local(prompt: str, output_format: type[T]) -> T:
             },
             timeout=120,
         )
-        response.raise_for_status()
     except requests.exceptions.RequestException as e:
         raise RuntimeError(
             f"Ollama not reachable at {OLLAMA_HOST}. Run `ollama serve` "
             "(or open the Ollama app)."
         ) from e
+
+    # Ollama answered, so it's running: an error here is about the request, most
+    # often a model that isn't pulled. Its own message says which, and telling
+    # you to start a server that's already up would send you the wrong way.
+    if not response.ok:
+        try:
+            body = response.json()
+        except ValueError:
+            body = None
+        detail = (body.get("error") if isinstance(body, dict) else None) or response.text
+        detail = str(detail).strip().rstrip(".") or "no details"
+        hint = (
+            f" Run `ollama pull {OLLAMA_MODEL}`, or set OLLAMA_MODEL in .env to "
+            "a model you have."
+            if response.status_code == 404
+            else ""
+        )
+        raise RuntimeError(
+            f"Ollama returned {response.status_code}: {detail}.{hint}"
+        )
 
     return output_format.model_validate_json(response.json()["message"]["content"])
 
