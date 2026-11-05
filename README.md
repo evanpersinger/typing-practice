@@ -19,6 +19,8 @@ It keeps a list of words you misspell, has an LLM write practice sentences aroun
 
 ## Running it
 
+Needs [uv](https://docs.astral.sh/uv/), Node 22 and pnpm.
+
 ```
 make install
 ```
@@ -30,7 +32,7 @@ make backend
 make frontend
 ```
 
-Open the URL from `make frontend`. Runs on a local Ollama model by default, so no API key is needed (see Setup).
+Open the URL from `make frontend` and pick a profile (see Profiles). Runs on a local Ollama model by default, so no API key is needed (see Setup).
 
 The backend port is set in the `Makefile`, the frontend port in `frontend/vite.config.ts`.
 
@@ -52,7 +54,7 @@ The testing profile lets you click through the UI without paying for model calls
 
 By default the app runs free and local: have [Ollama](https://ollama.com) running with a text model pulled (`OLLAMA_MODEL`, defaults to `qwen3.5:4b`). No key and no internet needed, but only as good as the model you've got pulled.
 
-To use a paid model instead, edit `.env` at the repo root:
+To use a paid model instead, copy `.env.example` to `.env` at the repo root (a fresh clone has no `.env`) and set:
 
 ```
 ANTHROPIC_API_KEY=your-key-here
@@ -61,6 +63,18 @@ LLM_PROVIDER=anthropic  # or openai, local is the default
 ```
 
 Only set the key for the provider you're using. If it's missing, the server prints which variable it needs rather than crashing.
+
+## Test
+
+The same checks CI runs:
+
+```
+uv run ruff check backend tests
+uv run pytest
+cd frontend && pnpm test && pnpm build
+```
+
+The tests don't need Ollama or an API key.
 
 ## Known rough edges
 
