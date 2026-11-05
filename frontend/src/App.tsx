@@ -97,6 +97,9 @@ export default function App() {
     if (tab === "punctuation" && punctuation.phase === "typing") {
       punctuation.abandon();
     }
+    // Free Type keeps its board across tab switches, so it pauses rather than
+    // being thrown away.
+    freeType.stopClock();
   }
 
   function openPractice() {

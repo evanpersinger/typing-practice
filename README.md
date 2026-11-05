@@ -65,4 +65,3 @@ Only set the key for the provider you're using. If it's missing, the server prin
 ## Known rough edges
 
 - Punctuation sessions cannot detect a dropped trailing period; you must type something to submit a sentence, but that space doesn't count as the missing mark.
-- Free Type clock never pauses when switching tabs; cosmetic display only, never stored.
