@@ -1,6 +1,6 @@
 // Same-origin. The dev server proxies /api to the backend (vite.config.ts), so
 // the port lives in one place instead of being baked into the app code.
-export const API_BASE = "/api";
+const API_BASE = "/api";
 
 /** Which world you're in. `personal` is your real data; `testing` is a separate
  *  database you can throw junk at. The backend keys off the header below. */
@@ -24,7 +24,7 @@ export interface Drill {
   target_words: string[];
 }
 
-export interface DrillsResponse {
+interface DrillsResponse {
   words: string[];
   drills: Drill[];
 }
@@ -36,7 +36,7 @@ export interface PunctuationDrill {
   feature: string;
 }
 
-export interface PunctuationDrillResult {
+interface PunctuationDrillResult {
   sentence: string;
   typed: string;
 }
@@ -49,7 +49,7 @@ export interface WordResult {
 
 /** One finished sentence. The backend does the grading, so this carries what
  *  you typed and which words the sentence was written to drill. */
-export interface DrillResult {
+interface DrillResult {
   sentence: string;
   typed: string;
   duration_ms: number;
@@ -94,14 +94,14 @@ export interface NewWord {
   reason: string;
 }
 
-export interface AnalysisResponse {
+interface AnalysisResponse {
   new_words: NewWord[];
   // Speed for the session you just finished, from the same query that backs the
   // stats tab, so the two numbers can never disagree.
   typing: TypingStats;
 }
 
-export interface AddWordResponse {
+interface AddWordResponse {
   word: string;
   /** False when the word was already on your list. Not a failure. */
   added: boolean;

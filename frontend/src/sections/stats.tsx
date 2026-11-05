@@ -375,7 +375,7 @@ export function useStats(setError: (message: string | null) => void) {
   };
 }
 
-export type StatsState = ReturnType<typeof useStats>;
+type StatsState = ReturnType<typeof useStats>;
 
 /** The stats screen: all-time numbers, the words you miss most, and one past
  *  session pulled up from the dropdown. */

@@ -335,7 +335,7 @@ export function usePractice(
   };
 }
 
-export type PracticeState = ReturnType<typeof usePractice>;
+type PracticeState = ReturnType<typeof usePractice>;
 
 /** The practice screen. Holds nothing itself: everything it draws comes off the
  *  hook above, which App keeps alive across tab switches. */
