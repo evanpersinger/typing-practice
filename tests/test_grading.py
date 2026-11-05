@@ -211,3 +211,19 @@ def test_letter_typos_are_not_punctuation_misses() -> None:
 
 def test_trailing_whitespace_is_ignored() -> None:
     assert find_punctuation_misses("Hello there.", "Hello there.  ") == []
+
+
+@pytest.mark.parametrize(
+    "typed",
+    [
+        "We need eggs, milk, and bread ",  # the space it takes to reach Enter
+        "We need eggs, milk, and breadx",  # or any other key in the period's place
+    ],
+)
+def test_dropped_trailing_period_is_a_missing_period(typed: str) -> None:
+    # The punctuation box only takes Enter once you've typed as many characters
+    # as the sentence has, so dropping the final period means one more key.
+    # That key must not hide the miss, or count as one of its own.
+    assert find_punctuation_misses("We need eggs, milk, and bread.", typed) == [
+        ("period", "missing")
+    ]
