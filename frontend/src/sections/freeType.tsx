@@ -124,7 +124,14 @@ export function useFreeType(
   // up never counts as practice time. Characters rather than words, because wpm
   // here has to mean the same thing it means on the stats tab (five characters
   // to a word).
-  const startedAt = useRef<number | null>(null);
+  //
+  // Paused the same way practice's clock is: `runningSince` is when the clock
+  // last started, null while it's stopped, and `banked` holds the time from
+  // before the last stop. Leaving the tab banks what's run so far and stops
+  // it; your next keystroke back starts it again, so time spent on the stats
+  // tab never counts against your wpm.
+  const runningSince = useRef<number | null>(null);
+  const banked = useRef(0);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [chars, setChars] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -179,6 +186,26 @@ export function useFreeType(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, phase, index, words.length]);
 
+  /** Total clock time so far, including the stretch that's running now. */
+  function clockMs(now: number) {
+    const running =
+      runningSince.current === null ? 0 : now - runningSince.current;
+    return banked.current + running;
+  }
+
+  /** Started by a keystroke, not by the board appearing, so staring at it for
+   *  ten seconds doesn't cost you wpm. A no-op while already running. */
+  function startClock() {
+    if (runningSince.current === null) runningSince.current = Date.now();
+  }
+
+  /** Called by App on every tab switch, like practice's: banks the time so far
+   *  and stops, so the next keystroke resumes rather than restarts. */
+  function stopClock() {
+    banked.current = clockMs(Date.now());
+    runningSince.current = null;
+  }
+
   /** Whoever clears Free Type clears all of it. A leftover miss count is a word
    *  added on its first mistake next time. */
   function reset() {
@@ -189,7 +216,8 @@ export function useFreeType(
     setCurrent("");
     setMisses({});
     setTypedCount(0);
-    startedAt.current = null;
+    runningSince.current = null;
+    banked.current = 0;
     setElapsedMs(0);
     setChars(0);
   }
@@ -231,9 +259,7 @@ export function useFreeType(
     setChars((n) => n + attempt.length);
     // Read once per word rather than on a timer: the numbers move when you
     // finish a word, which is the only moment they can change anyway.
-    if (startedAt.current !== null) {
-      setElapsedMs(Date.now() - startedAt.current);
-    }
+    setElapsedMs(clockMs(Date.now()));
     setIndex((i) => i + 1);
     setAttempts((all) => [...all, attempt]);
     if (attempt === word) return;
@@ -300,7 +326,8 @@ export function useFreeType(
     attempts,
     current,
     setCurrent,
-    startedAt,
+    startClock,
+    stopClock,
     inputRef,
     rows,
     wpm,
@@ -328,7 +355,7 @@ export function FreeType({
     attempts,
     current,
     setCurrent,
-    startedAt,
+    startClock,
     inputRef,
     rows,
     wpm,
@@ -419,11 +446,9 @@ export function FreeType({
             className="fixed top-0 left-0 size-px opacity-0"
             value={current}
             onChange={(e) => {
-              // First keystroke starts the clock, not the board appearing,
-              // so staring at it for ten seconds doesn't cost you wpm.
-              if (startedAt.current === null) {
-                startedAt.current = Date.now();
-              }
+              // Starts the clock on the first keystroke, and
+              // resumes it on the first one back after leaving the tab.
+              startClock();
               setCurrent(e.target.value);
             }}
             onKeyDown={handleKeyDown}
