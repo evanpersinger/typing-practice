@@ -86,7 +86,7 @@ export function useWords(
   return { draft, setDraft, note, selected, open, select, submit, remove };
 }
 
-export type WordsState = ReturnType<typeof useWords>;
+type WordsState = ReturnType<typeof useWords>;
 
 /** The weak-word board and the add-a-word panel. The board comes off the shared
  *  stats object rather than a fetch of its own. */

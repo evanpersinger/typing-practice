@@ -14,7 +14,7 @@ import {
 // No done phase: there's nothing to submit and nothing to report, words are
 // added the moment they earn it, so ending a round drops you back on the start
 // screen rather than at a summary you'd have to click through.
-export type FreePhase = "idle" | "loading" | "typing";
+type FreePhase = "idle" | "loading" | "typing";
 
 // Miss a word twice and it's a typo; three times and it's a habit worth adding
 // to the weak list. A missed word slides this far down the board rather than
@@ -311,7 +311,7 @@ export function useFreeType(
   };
 }
 
-export type FreeTypeState = ReturnType<typeof useFreeType>;
+type FreeTypeState = ReturnType<typeof useFreeType>;
 
 /** The Free Type screen. Holds nothing itself: everything it draws comes off
  *  the hook above, which App keeps alive across tab switches. */

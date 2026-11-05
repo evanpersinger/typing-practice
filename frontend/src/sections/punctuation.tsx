@@ -141,7 +141,7 @@ export function usePunctuation(
   };
 }
 
-export type PunctuationState = ReturnType<typeof usePunctuation>;
+type PunctuationState = ReturnType<typeof usePunctuation>;
 
 /** The punctuation screen: Practice's screens with a strict board, so a capital
  *  typed lowercase lights up red here. That capital is the whole exercise. */
