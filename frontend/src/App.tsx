@@ -102,6 +102,7 @@ export default function App() {
   function openPractice() {
     leaveSessionTabs();
     setTab("practice");
+    setError(null);
   }
 
   async function openStats() {

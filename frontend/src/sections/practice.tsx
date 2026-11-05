@@ -245,6 +245,9 @@ export function usePractice(
     setPhase("submitting");
     try {
       await submitResults(perDrill);
+      // A retry that got through clears the failure it was retrying, or the
+      // start screen goes on saying the submit failed.
+      setError(null);
       // Straight back to the start screen, the way Free Type ends. The recap
       // this used to show is the same SessionRecap the stats tab renders from
       // the session just saved, and one screen is enough places for it to live.

@@ -73,6 +73,7 @@ export function usePunctuation(
     setPhase("submitting");
     try {
       await submitPunctuationResults(results);
+      setError(null); // same as Practice: a retry that worked clears the failure
       reset();
       setPhase("idle");
     } catch (e) {
